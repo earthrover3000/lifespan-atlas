@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lifespan Atlas</title>
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MiIgeT0iNDkiIGZvbnQtc2l6ZT0iOTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIj7wn6etPC90ZXh0Pjwvc3ZnPg==">
+<script>/* Site-wide theme control — the single source of truth for manual dark/light.
+
+   Loaded as a BLOCKING <script> (no defer/async) early in every page's and
+   every app's <head>, so it runs before first paint: reading the stored
+   choice and stamping <html data-theme> synchronously means navigating
+   between pages never flashes the wrong theme.
+
+   Modes (localStorage['site-theme']):
+     'auto'  (default) — no attribute; CSS `color-scheme: dark light` follows
+                         the OS (see 界面 UI/styles/base.css).
+     'dark' / 'light'  — sets <html data-theme>, forcing color-scheme.
+
+   Public API (used by the Settings page toggle):
+     window.setSiteTheme(mode)  — persist + apply immediately.
+     window.getSiteTheme()      — current stored mode ('auto' if unset).
+     window.onSiteThemeChange(cb)— subscribe (fires cross-tab too). */
+(function () {
+  var KEY = 'site-theme';
+  var listeners = [];
+
+  function normalize(mode) {
+    return (mode === 'dark' || mode === 'light') ? mode : 'auto';
+  }
+
+  function apply(mode) {
+    var el = document.documentElement;
+    if (mode === 'auto') el.removeAttribute('data-theme');
+    else el.setAttribute('data-theme', mode);
+  }
+
+  function read() {
+    try { return normalize(localStorage.getItem(KEY)); } catch (e) { return 'auto'; }
+  }
+
+  // Apply immediately (this is the pre-paint work).
+  apply(read());
+
+  window.setSiteTheme = function (mode) {
+    mode = normalize(mode);
+    try {
+      if (mode === 'auto') localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, mode);
+    } catch (e) {}
+    apply(mode);
+    for (var i = 0; i < listeners.length; i++) { try { listeners[i](mode); } catch (e) {} }
+  };
+
+  window.getSiteTheme = function () { return read(); };
+
+  window.onSiteThemeChange = function (cb) {
+    if (typeof cb === 'function') listeners.push(cb);
+  };
+
+  // Keep other open tabs/pages in sync when the choice changes elsewhere.
+  window.addEventListener('storage', function (e) {
+    if (e.key !== KEY) return;
+    var mode = read();
+    apply(mode);
+    for (var i = 0; i < listeners.length; i++) { try { listeners[i](mode); } catch (err) {} }
+  });
+})();
+</script>
+<script>if(localStorage.getItem("site-show-dev")==="on")document.documentElement.setAttribute("data-show-dev","");</script>
+<style>/* Shared base styles for index pages (root, protected, private) and docs
+   pages (site-map, site-stats, lifespan-atlas plan). Loaded BEFORE the
+   page-specific stylesheet so page rules can override.
+
+   Workflow.css layers on top of this (workflow.html loads both): it keeps its
+   own GitHub-style palette but now expresses light/dark via the same
+   light-dark() + color-scheme mechanism, so the manual theme toggle reaches it
+   too. */
+
+/* ---- Theme tokens ----
+   Each colour is declared exactly once via light-dark(light, dark); the value
+   that wins follows the `color-scheme` property (single source of truth — no
+   duplicated palette across a media query).
+
+   Default `dark light` = AUTO: follow the OS, falling back to dark when the OS
+   states no preference (preserves the site's long-standing dark default). The
+   Settings toggle overrides this by setting a data-theme attribute on <html>,
+   which narrows color-scheme to one keyword — applied before first paint by
+   page-widgets/theme-init.js, so navigation never flashes the wrong theme. */
+:root {
+  color-scheme: dark light;                    /* auto (OS-driven, dark default) */
+  /* THE ROW (user decision 2026-10-17): every one-line control or entry —
+     a link row, a search box, a dropdown, a caption — is exactly this tall,
+     and rows stack with this gap, so two columns side by side stay on one
+     grid. The height is the link row's own: 1.1rem text at line-height 1.4
+     plus 0.35rem padding above and below. */
+  --row-h: calc(1.1rem * 1.4 + 0.7rem);
+  --row-gap: 0.2rem;
+  --bg:      light-dark(#f5f5f5, #0f0f0f);
+  --surface: light-dark(#ffffff, #1a1a1a);
+  --border:  light-dark(#d0d0d0, #2e2e2e);
+  --accent:  light-dark(#3a5fd9, #7c9ef5);
+  --text:    light-dark(#1a1a1a, #e0e0e0);
+  --muted:   light-dark(#666,    #888);
+  /* The FUTURE GROUND — "this time is not settled". Used by the Site Log
+     rings, where the website's current version band dissolves into it past
+     today and it then carries on to the rim (the shared ring-log engine's two
+     future registers). Distinct from --muted on purpose: muted is a
+     TYPOGRAPHY grey and the gap it fills means "no data here", which happens
+     in the past too. Pairs with the lifespan-atlas theme's `futureGrey`, the
+     SSOT for the same two registers on the app side — keep the two in step. */
+  --future-grey: light-dark(#d3d3d3, #4a4a4a);
+  /* THE YOU-ARE-HERE RED — "now is here". The site-stats chart's today
+     guide (stats.css .today-line). One value in both themes, as the atlas
+     has it: it is a marker on top of whatever ground, not a ground. Pairs
+     with the lifespan-atlas's ANCHOR_MARKER_COLOR (lib/eventManifoldSpec),
+     the anchor / today marker red on every atlas surface — keep the two in
+     step, as --future-grey is kept with the theme's futureGrey. */
+  --anchor-red: #e53935;
+}
+:root[data-theme="light"] { color-scheme: light; }  /* forced light */
+:root[data-theme="dark"]  { color-scheme: dark;  }   /* forced dark  */
+
+/* ---- Reset + base ---- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Reserve scrollbar gutter so short pages (no scrollbar) and long pages
+   (with scrollbar) use the same content width — no horizontal jump when
+   navigating between them. */
+html { scrollbar-gutter: stable; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  /* Stack adopted from chinese-languages: native Apple system font on macOS/iOS,
+     Segoe UI on Windows, system-ui as a generic fallback, then sans-serif. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  line-height: 1.7;
+  padding: 2rem;
+}
+
+/* ---- Layout ---- */
+/* 800px keeps prose/index lines around the readability sweet spot
+   (50–75 characters at default font size). Apps that benefit from more
+   horizontal space (lifespan-atlas, life-clock) override this. */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Back-link sits at the top-right corner of the container so the h1
+   lands at the same vertical position across docs pages, regardless of
+   whether the back-link wraps or how long it is.
+   Armored against index.css's block-style global `a` rule — explicit
+   resets so cascade can't make the back-link a block-shaped button. */
+.back-link {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  line-height: inherit;
+  background: none;
+  transition: none;
+}
+.back-link:hover { background: none; text-decoration: underline; }
+
+/* Breadcrumb nav above the h1. Tells visitors WHERE they are within the
+   site by spelling out the path from Home to the current page. Replaces
+   the back-link on shell pages (apps stay plain, with their own back-link).
+   Armored against index.css's block-style global `a` rule — explicit resets
+   so cascade can't make breadcrumb links into block-shaped buttons. */
+.breadcrumb {
+  color: var(--muted);
+  font-size: 0.85em;
+  margin: 0 0 0.6rem;
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  line-height: 1.5;
+}
+.breadcrumb a {
+  color: var(--accent);
+  text-decoration: none;
+  display: inline;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  line-height: inherit;
+  transition: none;
+}
+.breadcrumb a:hover { background: none; text-decoration: underline; }
+.breadcrumb [aria-current="page"] { color: var(--text); }
+.breadcrumb .sep { margin: 0 0.3em; opacity: 0.5; }
+/* THE BREADCRUMB LINE with the page's controls at its right end (index
+   pages: Filter ▸ and the Planned / topic switches — user decision
+   2026-10-17). The crumb keeps its own look; the line takes its spacing.
+   Wraps on a narrow screen, the controls staying right-aligned. */
+.crumb-line {
+  display: flex; flex-wrap: wrap; align-items: center;
+  column-gap: 0.9rem; row-gap: 0.2rem; margin: 0 0 0.6rem;
+  /* ONE HEIGHT on every surface (user report 2026-10-18: Filter ▸ and the
+     Planned switch made the line taller than a bare breadcrumb). The line
+     is the breadcrumb's own line box (0.85em × 1.5) whatever sits beside
+     it; the controls below give back their vertical padding as negative
+     margin, so they keep their tap area but no longer push the line. */
+  min-height: calc(0.85em * 1.5);
+}
+.crumb-line > .breadcrumb { margin: 0; }
+.head-controls { margin-left: auto; display: inline-flex; align-items: center; gap: 0.9rem; }
+.head-controls > button { margin-block: -0.15rem; }
+
+/* ---- Head-region typography ---- */
+h1 {
+  font-size: 1.6rem;
+  color: var(--text);
+  margin-bottom: 1.2rem;
+}
+
+/* Category glyphs injected into a content page's own h1 at build time from
+   site-structure.yaml's `categories:` (same emoji SSOT as the tier-index
+   chips and the category-matrix column heads). Sit INLINE right after the
+   title rather than floated to the container edge (user decision
+   2026-08-17): at 800px a short title leaves the far right so distant that
+   the glyphs read as a stray corner widget instead of an attribute of the
+   title. Inline also follows a wrapped title's last line and stays beside
+   the title on phones. Emoji-only with a title/aria-label tooltip, matching
+   the matrix column-head convention; slightly muted so they don't compete
+   with the title text. */
+.page-cats {
+  display: inline-block;
+  font-size: 0.75em;
+  letter-spacing: 0.12em;
+  margin-left: 0.5em;
+  opacity: 0.85;
+  vertical-align: 0.1em;
+}
+/* Each glyph links to the page's own tier category-matrix (unfiltered — user
+   decision 2026-08-17), so the taxonomy is traversable: page → the grid →
+   whatever you want to narrow to once you're looking at it. Styling
+   is neutralised the same way .head-meta a is, because index-style sheets
+   turn a bare `a` into a block-level button; the hover scale is the only
+   affordance an emoji can really carry. Pages on a tier with no matrix keep
+   an inert <span>, which is why the cursor differs by element. */
+a.page-cat {
+  display: inline-block; color: inherit; text-decoration: none;
+  font-size: inherit; line-height: inherit; padding: 0; border-radius: 0;
+  background: none; cursor: pointer; transition: transform 0.12s ease;
+}
+a.page-cat:hover, a.page-cat:focus-visible {
+  background: none; text-decoration: none; transform: scale(1.18);
+}
+span.page-cat { cursor: help; }
+
+/* Stats / metadata line directly under the h1. Used for build info,
+   tier label, line counts, page-progress, etc. The negative top margin
+   pulls it up close to the h1 so they read as one heading unit. */
+.head-meta {
+  color: var(--muted);
+  font-size: 0.85em;
+  margin: -0.5rem 0 1rem;
+}
+/* Inline links inside .head-meta — explicit overrides because index pages'
+   global `a` rule turns links into block-style buttons (display:block,
+   padding, etc.); we have to neutralize all of that for inline meta links.
+   These overrides are no-ops on docs pages (where `a` is already inline) so
+   they're safe to live in shared base. */
+.head-meta a {
+  color: inherit;
+  text-decoration: none;
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  transition: none;
+}
+.head-meta a:hover { background: none; text-decoration: underline; }
+
+/* ---- Page-level search filter ---- */
+/* Sits directly under .head-meta on pages that have a list to filter
+   (index pages, site-map). Hides matched-out rows via `.search-hidden`. */
+.filter {
+  display: block;
+  width: 100%;
+  height: var(--row-h);                        /* THE ROW — see :root */
+  padding: 0 0.8rem;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+}
+.filter:focus { outline: none; border-color: var(--accent); }
+.filter::placeholder { color: var(--muted); }
+.search-hidden { display: none !important; }
+
+/* ---- Tables (shared shell; pages override padding / colors) ---- */
+table { width: 100%; border-collapse: collapse; }
+
+/* ---- Inline utility: muted secondary text ---- */
+/* Same grey as .head-meta — used inline for "this is a footnote / cited
+   form / secondary annotation" within otherwise-primary text. */
+.muted { color: var(--muted); }
+
+/* ---- Buttons ---- */
+/* Site-wide primary/secondary action buttons. Works on both <button>
+   and <a> (the latter needs text-decoration: none, set explicitly).
+   Page-specific layout (margins, alignment) stays at the call site —
+   only visual primitives live here.
+   - .btn-primary: accent-fill (the dominant action; e.g. dissertation
+     "Read PDF", map-explorer "Render" / "Save PNG").
+   - .btn-secondary: accent-outline on transparent (the lower-weight
+     companion; e.g. dissertation "Download LaTeX source").
+   - :disabled state used by the map exporter while a save runs. */
+.btn-primary,
+.btn-secondary {
+  display: inline-block;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.12s;
+}
+.btn-primary { background: var(--accent); color: var(--bg); }
+.btn-secondary { background: transparent; color: var(--accent); }
+.btn-primary:hover,
+.btn-secondary:hover { opacity: 0.88; transform: translateY(-1px); }
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+}
+
+/* ---- Bio entry page (site root) ---- */
+/* Bio block — paragraph stack with modest vertical breath, mathematical-set
+   notation and emoji-prefixed lines. Rendered as a 2-column CSS Grid so
+   that all .bio-hint cells align at the same x position regardless of
+   how long the substantive content (.bio-content) on each line happens
+   to be. `max-content` on the first column makes the grid auto-fit to the
+   widest line; `display: contents` on each <p> hoists the inner spans
+   into the grid so each row is exactly [content, hint]. Lines without a
+   hint still emit an empty .bio-hint to preserve column alignment. */
+.bio {
+  margin: 1.5rem 0 2rem;
+  display: grid;
+  grid-template-columns: max-content auto;
+  column-gap: 1.5em;
+  row-gap: 0.4rem;
+  align-items: baseline;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+.bio p { display: contents; }
+.bio-hint {
+  color: var(--muted);
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Linktree-style buttons under the bio. Same aesthetic family as a.app-card
+   on index pages but slimmed: no icon, no description, label-only, full-width.
+   Grid with `grid-auto-rows: 1fr` so every button stretches to the tallest
+   row's height — keeps Enter (two lines: label + "best on a laptop") and
+   Instagram (one line) vertically aligned regardless of content. */
+.entry-links { display: grid; grid-auto-rows: 1fr; gap: 0.6rem; margin-top: 1.5rem; }
+.entry-links a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1.05rem;
+  line-height: 1.4;
+  text-decoration: none;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.entry-links a:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+/* Primary entry link — light-blue fill marks the intended path into the
+   site, distinguishing it from secondary social links rendered as surface
+   cards. Fixed light-blue (rather than var(--accent)) keeps the button
+   the same gentle shade in both themes; dark text in both modes preserves
+   legibility on the light background. */
+.entry-links a.primary {
+  background: #a8c5ff;
+  border-color: #a8c5ff;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+.entry-links a.primary:hover {
+  background: #bdd3ff;
+  border-color: #bdd3ff;
+}
+.entry-hint {
+  font-size: 0.75em;
+  font-weight: normal;
+  color: var(--muted);
+}
+.entry-links a.primary .entry-hint { color: #1a1a1a; opacity: 0.65; }
+
+/* ---- Appendix sections ---- */
+/* h2.appendix (emitted by render_external_links_html for the {{EXTERNAL_
+   LINKS}} link sections — reference material, not works; user decision
+   2026-08-15): lettered A. B. … instead of numbered. The .appendix::before
+   rule out-specifies the pages' generic `.container > h2::before` numeric
+   prefix, so it wins without !important; pages should still scope their
+   numeric counter-increment to `h2:not(.appendix)` so the numbers don't
+   silently skip values. page-nav.js letters the matching Contents rows. */
+.container { counter-reset: appendix-section; }
+.container > h2.appendix { counter-increment: appendix-section; }
+.container > h2.appendix::before { content: counter(appendix-section, upper-alpha) ". "; }
+
+/* ---- Table of contents ---- */
+/* Used by site-map, lifespan-atlas plan, workflow. Boxed surface card with a
+   nested ordered list; folders render as <details>/<summary> for collapse. */
+.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem 1.5rem; margin-bottom: 2.5rem; }
+.toc-desc { color: var(--muted); }
+/* Explicitly reset every property a page-level `h2` rule might set
+   (workflow.css's body h2 has border-bottom, padding-bottom, monospace,
+   etc.) so they can't leak into the TOC heading via the cascade. */
+.toc h2 {
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin: 0 0 0.8rem;
+}
+.toc-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.toc-header h2 { margin: 0 0 0.8rem; }
+.toc-controls { display: flex; align-items: baseline; font-size: 0.8rem; color: var(--muted); }
+.toc-toggle-btn { background: transparent; border: 0; padding: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 0.8rem; }
+.toc-toggle-btn:hover { color: var(--accent); text-decoration: underline; }
+.toc ol { padding-left: 0.6rem; list-style: none; text-indent: 0; }
+.toc li { margin: 0.3rem 0; }
+.toc > ol > li > ol > li                               { padding-left: 3ch;   text-indent: -3ch; }
+.toc > ol > li > ol > li > ol                          { margin-left: -3ch; }
+.toc > ol > li > ol > li > ol > li                     { padding-left: 4.5ch; text-indent: -4.5ch; }
+.toc > ol > li > ol > li > ol > li > ol                { margin-left: -4.5ch; }
+.toc > ol > li > ol > li > ol > li > ol > li           { padding-left: 6ch;   text-indent: -6ch; }
+/* Inline link styling armored against page-CSS leaks (e.g. index.css's
+   button-style global `a` rule). Every property a global `a` might set
+   is explicitly redeclared here so cascade can't fall through. */
+.toc a {
+  color: var(--accent);
+  text-decoration: none;
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  transition: none;
+}
+.toc a:hover { background: none; text-decoration: underline; }
+.toc details { margin: 0.2rem 0; }
+/* Same armor pattern as .toc h2: redeclare every property a page-CSS
+   `details > summary` rule (e.g. workflow.css) might set, so the cascade
+   can't reach in. */
+.toc summary {
+  cursor: pointer;
+  list-style: none;
+  display: list-item;
+  font-weight: inherit;
+  font-size: inherit;
+  color: inherit;
+  border-bottom: none;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+}
+.toc summary::-webkit-details-marker { display: none; }
+.toc summary::before { content: "\25B8 "; color: var(--muted); font-size: 0.8em; }
+.toc details[open] > summary::before { content: "\25BE "; }
+/* Leaf entries (no <details> wrapper) reserve the same space as the triangle
+   so leaves and folders align at the same indent. */
+.toc li > a::before { content: "\25B8 "; color: transparent; font-size: 0.8em; }
+.toc details > ol { margin-top: 0.3rem; }
+
+/* Index-page-specific styles (root, protected, private). Layered on top of
+   base.css — theme tokens, body, h1, .head-meta, .container, .back-link
+   live there. Index pages render block-style anchor links and sidebar
+   layouts that don't apply to docs pages. */
+
+ul { list-style: none; padding: 0; margin: 0; }
+li { margin: var(--row-gap) 0; }
+
+/* Block-style page-list links are the index-page tap-target pattern. Scoped
+   to .row (the main + side columns wrapper) so the rule can't leak into
+   .head-meta a or .back-link, both of which need inline behavior. */
+.row a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  display: block;
+  padding: 0.35rem 0.8rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.row a:hover { background: var(--surface); text-decoration: underline; }
+
+hr { border: none; border-top: 1px solid var(--border); margin: 1.2rem 0; }
+
+/* Page-tier subtitle below the h1 (e.g. "Protected Index"). Negative top
+   margin pulls it close to the h1 so they read as one heading unit.
+   Distinct from .head-meta (used for build info / line counts) — this
+   carries the access-tier label only. */
+.subtitle {
+  margin-top: -1rem;
+  margin-bottom: 1.2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+/* .search-hidden + .filter live in base.css (shared with site-map). */
+
+/* Tier-nav dropdown in the side column — replaces a multi-row text list
+   of accessible indexes. Fixed height (one row) regardless of how many
+   tiers it contains, so the docs/meta entries below stay in a stable
+   vertical position when navigating between tiers. Styled to match the
+   surrounding <a> rows (same font-size, line-height, padding, radius)
+   so the side column reads as one coherent list. */
+.tier-nav-row { padding: 0; }
+.tier-nav {
+  width: 100%;
+  font-family: inherit;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  /* THE ROW's height (base.css :root), border included, so this bordered
+     select sits on the same grid as the plain <a> rows beside it. */
+  height: var(--row-h);
+  padding: 0 2rem 0 0.8rem;
+  background: transparent;
+  /* Closed-state text uses the body text colour, not the accent — the
+     visible "current tier" name reads as a "you are here" label, not as
+     a clickable link. The accent-coloured chevron (background-image)
+     signals that the box itself is still interactive. */
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  /* light-dark() flips the caret fill with the theme (blue #3a5fd9 light /
+     #7c9ef5 dark) — follows color-scheme, so it obeys the manual toggle. */
+  background-image: light-dark(url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%233a5fd9' d='M6 8 0 0h12z'/%3E%3C/svg%3E"), url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237c9ef5' d='M6 8 0 0h12z'/%3E%3C/svg%3E"));
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.tier-nav:hover { background-color: var(--surface); border-color: var(--accent); }
+.tier-nav:focus { outline: none; border-color: var(--accent); }
+/* Open-dropdown options: navigable tiers shown in accent (link colour),
+   current tier shown in body text colour. Browser support for option
+   styling varies — Chromium honours these in the popup, Firefox partially,
+   Safari/system pickers minimally. */
+.tier-nav option { color: var(--accent); background-color: var(--bg); }
+.tier-nav option:checked { color: var(--text); }
+/* .filter rule is in base.css; only the row layout below stays index-specific. */
+
+/* SEARCH + INDEX SWITCHER, one line, half each (user decision 2026-09-06).
+   The switcher was the side column's first row, which spent a full row and
+   the blank separator beneath it on a control that belongs beside the page's
+   other control rather than atop a list of links.
+
+   Emitted only where there IS a switcher — the website's three tier indexes.
+   The five consoles on this engine pass no `index_entries`, so their search
+   input stays exactly as it was, full width and unwrapped. */
+.filter-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+}
+/* Halves. `min-width: 0` because a flex item's default `min-width: auto`
+   refuses to shrink below its content — a long option label would otherwise
+   push the select past its half and squeeze the search box. */
+.filter-row > .filter, .filter-row > .tier-nav {
+  flex: 1 1 50%;
+  min-width: 0;
+  margin-bottom: 0;
+}
+/* In this row the select is a sibling of the search box, so it takes the
+   search box's typography; both are THE ROW tall (base.css :root), so the
+   line is no taller with the switcher than without it. */
+.filter-row > .tier-nav {
+  width: auto;
+  font-size: 1rem;
+  border-radius: 6px;
+}
+
+/* Category chips — derived filter row between the search input and .row,
+   led by a muted "Filter:" label. One chip per category present among the
+   index's entries; multi-select with OR semantics (an entry shows while it
+   carries any active category; none active = show all). Non-matching
+   entries hide via .cat-hidden, a class deliberately separate from
+   .search-hidden so search and category compose as AND. */
+.cat-hidden { display: none !important; }
+/* Below the search box, holding only the chips: the Filter toggle and the
+   switches sit on the breadcrumb line (base.css .crumb-line). Takes no room
+   while the chips are folded away. */
+.cat-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0; }
+/* Disclosure control — the row's only resting-state UI. Shows the active
+   count while collapsed with filters applied ("Filter (2) ▸"). */
+.cat-chips__toggle {
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.15rem 0.4rem 0.15rem 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.cat-chips__toggle:hover { color: var(--text); }
+/* Expanded chips take their own full-width line below the search box, so
+   the Filter toggle and the switches up on the breadcrumb line never move. */
+.cat-chips__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex-basis: 100%;
+  margin: 0 0 1rem;
+}
+.cat-chips__body[hidden] { display: none; }
+
+/* iOS-style teaser switches — right edge of the control row. Planned mirrors
+   the Settings "Show planned pages" checkbox via the same localStorage key.
+   A page's TOPIC switch (index_page `topic_switches`) wears the same chrome
+   ON PURPOSE: the same gesture over another kind of hidden row. (A third,
+   Parked, went on 2026-10-18 with the parked state itself — see index_page
+   `_KIND_ORDER`.) */
+.planned-switch, .topic-switch {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.15rem 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.planned-switch:hover, .topic-switch:hover { color: var(--text); }
+.planned-switch__track, .topic-switch__track {
+  width: 1.9rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.15s;
+}
+.planned-switch__knob, .topic-switch__knob {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: var(--bg);
+  transition: transform 0.15s;
+}
+/* Every switch claims `margin-left: auto`, which on a row carrying two puts
+   one in the middle and one at the edge. The adjacent-sibling rule pulls the
+   second up against the first, while either alone still right-aligns. */
+:is(.planned-switch, .topic-switch) + .topic-switch { margin-left: 0.9rem; }
+
+.planned-switch[aria-pressed="true"] .planned-switch__track,
+.topic-switch[aria-pressed="true"] .topic-switch__track { background: var(--accent); }
+.planned-switch[aria-pressed="true"] .planned-switch__knob,
+.topic-switch[aria-pressed="true"] .topic-switch__knob { transform: translateX(0.8rem); }
+/* On the breadcrumb line the group spaces its controls itself (base.css
+   .head-controls gap), so the row-era auto/adjacent margins step aside. */
+.head-controls :is(.planned-switch, .topic-switch) { margin-left: 0; }
+.head-controls .cat-chips__toggle { padding-right: 0; }
+/* Contextual reset — hidden while no chip is active (an action, not a
+   filter, so it doesn't join the pill state model). */
+.cat-chips__clear {
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.15rem 0.4rem;
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.cat-chips__clear:hover { text-decoration: underline; }
+.cat-chips__clear[hidden] { display: none; }
+.cat-chip {
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.15rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+.cat-chip:hover { border-color: var(--accent); color: var(--text); }
+.cat-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+}
+/* Chips whose only members are planned rows (incl. the Uncategorised
+   pseudo-chip) surface only while planned rows are revealed — otherwise
+   they'd filter the everyday list down to nothing. */
+html:not([data-show-planned]) .cat-chip--planned-only { display: none; }
+/* Divider after the leading Uncategorised pseudo-chip — it filters by
+   absence, a different kind of control than the topic chips it precedes. */
+.cat-chips__divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0 0.2rem;
+}
+
+/* Developer entries — index cards and rows for scaffolding rather than
+   content (site-structure.yaml `dev: true`; Launchbolt is the only one so
+   far). HIDDEN BY DEFAULT and revealed by Settings' "Show developer
+   entries", the same shape as the planned rows below: the index head
+   snippet stamps <html data-show-dev> from localStorage['site-show-dev']
+   before first paint.
+
+   Written as :not() rather than a hide/show pair because .dev-entry lands on
+   three different kinds of element — an .app-card anchor, its side-column
+   <li>, and a plain row — so there is no single `display` value to restore.
+   Removing the rule instead lets each keep its own.
+
+   The <li> carries the class alongside the card it wraps, so a hidden card
+   leaves no gap in the side column.
+
+   NOT a privacy mechanism: the card is in the HTML either way, and anything
+   that must not ship is a ceiling question, not a preference
+   (TIER-VARIANTS.md rulings 18 and 21). */
+html:not([data-show-dev]) .dev-entry { display: none; }
+
+/* Planned-page teaser rows — inert grey entries after the live page list,
+   hidden unless the visitor opted in on Settings ("Show planned pages"):
+   the index head snippet stamps <html data-show-planned> from
+   localStorage['site-show-planned'] before first paint (theme-init
+   pattern). Metrics mirror .row a (same font, line-height, padding) so
+   revealed rows sit on the same grid as the link rows above them. */
+.planned-row {
+  display: none;
+  font-size: 1.1rem;
+  line-height: 1.4;
+  padding: 0.35rem 0.8rem;
+  color: var(--muted);
+}
+html[data-show-planned] .planned-row { display: block; }
+
+/* Topic switches (the website's site-structure.yaml `topic: <name>`) have
+   NO rule here on purpose. Their hide rule is the .dev-entry one with the
+   topic name as the kind, and the index engine emits it per page, only
+   where an entry on that page carries the topic — this file is inlined
+   into every edition, so a topic named here would ship in all of them,
+   and the switch is private-tier only (user decision 2026-09-25). See
+   index_page's `_topics` block. */
+/* The kind's pill beside a teaser's name: 'planned' (intended, nothing
+   built yet). */
+.planned-tag {
+  font-size: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  margin-left: 0.45rem;
+  vertical-align: 0.12rem;
+  letter-spacing: 0.02em;
+}
+/* A teaser row that links its placeholder page: the anchor takes over as the
+   block tap-target (it inherits .row a's block metrics), so the li sheds its
+   own padding to avoid doubling; colour stays muted — clickable, still a
+   teaser, not a live page. */
+.planned-row--linked { padding: 0; }
+
+/* The divider between the live section and the planned one. It carries the
+   teaser kinds' own `-row` classes, so the reveal rules above hide and show
+   it exactly like the teasers it introduces — a plain spacer would sit under
+   the live rows as a stray gap whenever the switch is off.
+
+   Height is ONE ROW (2.25rem = the 36px a .planned-row occupies: 1.1rem text
+   at line-height 1.4, plus 0.35rem padding top and bottom). An empty line
+   should be exactly that — a line — and anything else breaks the pitch the
+   list and the side column share. */
+.teaser-gap { padding: 0; height: 2.25rem; }
+
+/* TEASER CARDS — a planned APP keeps its card shape (user decision
+   2026-09-06). What a thing IS does not change because it has not shipped:
+   dropping an app to a row among the pages says "page" about an app, and the
+   shelf is where a reader looks for apps whether or not they can open one
+   yet.
+
+   Same reveal contract as the teaser ROWS above, and the same AND rule for a
+   card wearing both kinds — a card is hidden until its switch, so the pair
+   below must not show a both-kinds card when only one switch is on. The
+   display value differs (rows are `block`, a card is the flex box .app-card
+   already declares) which is why these cannot simply join the rules above. */
+/* VISIBILITY IS THE <li>'s JOB, not the card's. A teaser card sits in the
+   list among the other teasers (user decision 2026-09-06), and its wrapping
+   row already carries the `<kind>-row` classes — so the reveal rules above
+   hide and show it with everything else, and the AND rule for a both-kinds
+   teaser is inherited rather than restated. The card below is APPEARANCE
+   only.
+
+   This replaced a set of display rules on the card itself, which had to be
+   double-classed to outrank `.app-card`'s own `display: flex` and were a
+   second visibility mechanism for one case. */
+.planned-row--card {
+  /* The row's padding would inset the card inside its own list item; the
+     card brings its own box. Same reason `--linked` zeroes it. */
+  padding: 0;
+}
+
+/* INERT ONLY WHERE IT REALLY IS. A teaser card is an <a> when it has
+   somewhere to go — on the private tier it links its placeholder page, the
+   same as a `--linked` teaser row — and a <div> when it does not, which is
+   what the shipped tiers get since placeholders never leave private.
+
+   Keying on the ELEMENT rather than the modifier is what keeps those two
+   apart. A blanket `cursor: default` here made the private card read as dead
+   when it was in fact a working link, hover feedback and all; the engine
+   already decides the tag from the href, so the CSS can just follow it.
+
+   The COLOUR stays muted either way, matching `.planned-row--linked > a`
+   above: grey says nothing is built yet, and the link only opens the plan. */
+div.app-card--planned { cursor: default; }
+.app-card--planned .app-card__name {
+  color: var(--muted);
+}
+/* The icon of an app that does not run yet: present, so the card is
+   recognisably that app, but held back from competing with the live shelf. */
+.app-card--planned .app-card__icon {
+  opacity: 0.55;
+}
+/* The pill rides INSIDE the name row (user decision 2026-09-06), to the right
+   of the name.
+
+   SCOPED TO THE TEASER CARDS, not to .app-card__name at large. The canonical
+   rule below gives every card name `white-space: nowrap; overflow: hidden;
+   text-overflow: ellipsis`, and turning that box into a flex container
+   changes how a long name truncates on every LIVE card — and would clip the
+   pill instead of the text, since the pill is the last thing in the box. One
+   new case is not a reason to alter the shelf's existing typography.
+
+   So: flex only where a pill exists — and the NAME TEXT gets its own box so
+   it can ellipsis while the pill stays pinned. An earlier version traded the
+   ellipsis for wrapping instead, which let "Chromatic Camelot" + its pill
+   take two lines and pushed the card to 99px against the 74.8px every other
+   card holds — visible as a lump in the grid. A bare text node cannot be the
+   flex item that truncates, which is why the engine wraps the name in a span
+   whenever there is a pill. */
+.app-card--planned .app-card__name {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.app-card__name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-card--planned .app-card__name > .planned-tag {
+  flex: none;
+}
+/* Grey means NOTHING IS BUILT — the link only opens the plan. (Link-blue was
+   for parked rows with source behind them, until the parked state went on
+   2026-10-18.) */
+.planned-row--linked > a { color: var(--muted); }
+
+/* Per-row "open this folder on disk" affordance — an index_page entry
+   carrying `folder_href` (规划中心 Planning Hub's spoke rows, pointing at
+   origin://folder/<key>). The row's own anchor is a BLOCK tap-target filling
+   the li, so this second link is positioned over its right edge rather than
+   sharing a flex line; .has-folder supplies the containing block and the
+   z-index lifts it above the block anchor it overlaps.
+   MUTED, NOT HIDDEN-UNTIL-HOVER: an affordance nobody can see is one nobody
+   uses, and for 创作 Creation's benches (素材 Raw Material) this is the only route to the folder
+   from a browser at all — they sit in the data vault, which the local server
+   does not serve. */
+/* Group heading inside a row list — see index_page's `group` entry key. A
+   label, not a link: it names the run of rows beneath it. Muted and small so
+   the rows stay the thing being read. ONE ROW EXACTLY (user decision
+   2026-10-17): the caption and the space around it fill one row slot —
+   THE ROW's height and gap (base.css :root) — with the text set at the
+   slot's foot, so captions never knock the two columns off one grid. */
+.row-group {
+  margin: var(--row-gap) 0; height: var(--row-h); padding-bottom: 0.3rem;
+  display: flex; flex-wrap: wrap; align-content: flex-end; align-items: baseline;
+  color: var(--muted); font-size: 0.75rem; line-height: 1.4;
+  text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;
+}
+/* A caption's own stats link (`stats 📊`), RIGHT-ALIGNED (user decision
+   2026-10-16) with its right edge on the 📁 glyph's: .row-folder's 0.5rem
+   offset plus its 0.4rem padding. Baseline-aligned so the smaller link text
+   sits on the caption's line; the gap and wrap keep a narrow column from
+   running caption and link together — wrapped, the link stays right. */
+.row-group.has-stats {
+  justify-content: space-between; column-gap: 0.75rem; padding-right: 0.9rem;
+}
+.row-group.has-stats > a { margin-left: auto; }
+/* The link itself: inline, not a block row target —
+   `.row a` would otherwise pad it into a row. Lowercase, regular weight,
+   unspaced and in the caption's muted grey rather than link blue (user
+   decision 2026-10-16): a quiet aside to the caption, not one more door
+   competing with the rows. The 📊 and the hover underline say it's a link. */
+.row .row-group a {
+  display: inline; padding: 0; line-height: inherit; border-radius: 0;
+  font-size: 0.85rem; font-weight: 400; letter-spacing: normal;
+  text-transform: none; color: inherit;
+}
+.row .row-group a:hover { background: none; }
+/* A heading with nothing visible under it is noise, and there are two ways to
+   get one: a group holding only teasers whose switch is off, and — already
+   true before any of this — a text or category filter that excludes every row
+   in a group. `.row-group--empty` is set by the script at the foot of the
+   page, which re-counts after every reveal and every filter pass. */
+.row-group--empty { display: none; }
+
+li.has-folder { position: relative; }
+.row-folder {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  line-height: 1;
+  text-decoration: none;
+  opacity: 0.4;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+li.has-folder:hover .row-folder { opacity: 0.75; }
+.row-folder:hover,
+.row-folder:focus-visible { opacity: 1; background: var(--surface); }
+
+/* Entry count on a console's plan rows (page-widgets/plan-counts.js): the
+   widget reads both authored halves off the plan store and stamps the total
+   as `data-count`; this draws it, in the same muted form the plan page's
+   own headings wear (docs.css). No attribute, no badge — a stub, a locked
+   vault and an offline machine all render the plain row. */
+.row a[data-count]::after {
+  content: " (" attr(data-count) ")";
+  color: var(--muted); font-size: 0.8rem;
+}
+
+.row { display: flex; gap: 2rem; align-items: flex-start; }
+/* Both columns flex:1 → they divide the row's available width evenly,
+   minus the 2 rem gap. No hardcoded width on either side. */
+.main { flex: 1; min-width: 0; }
+.side { flex: 1; min-width: 0; }
+.side hr { margin: 0.8rem 0; }
+
+@media (max-width: 600px) {
+  .row { flex-direction: column; gap: 0; }
+  .side { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; }
+}
+
+/* Apps section — installable apps render as cards (icon + name + description + Open).
+   No bottom margin: the page list sits flush against the app card, shifting all
+   page links up by one side-column row pitch (li's outer height ≈ 2.44rem)
+   relative to the index/docs links. On the private index this puts "Travel
+   Calendar" (the second page link) on the same baseline as "Site Map" (the
+   first docs link in the side column), not "Life Clock". */
+/* Gap 0.2rem — the SAME collapsed pitch as the side/page list rows (li margin
+   0.2rem). Cards must repeat on the side-column row grid so the two columns
+   align; a wider gap (the old 0.6rem) made each card span 2.23 rows instead of
+   2 and drifted the page list ~0.4rem lower per card. */
+.apps { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.2rem 0 0; }
+
+/* `a.app-card, div.app-card` (2026-09-06). A planned app has nowhere to go so
+   it renders as a <div>, and under the original `a.app-card` alone it
+   inherited none of the box below — bare text beside an icon.
+   
+   The obvious fix, dropping to a bare `.app-card`, is WRONG and was tried:
+   `.row a` (0,1,1) sits earlier in this sheet and sets `display: block`, so a
+   single-class `.app-card` (0,1,0) loses to it and every LIVE card fell out
+   of its flex box — 131px tall instead of the two rows the grid below is
+   built on. The element qualifier was load-bearing, not incidental. Naming
+   both elements keeps the (0,1,1) that outranks `.row a` and covers the new
+   case. Caught by measuring the rendered cards in a browser; the source read
+   fine both times.
+   
+   :hover stays on the anchor alone — feedback belongs where there is
+   something to click. */
+a.app-card, div.app-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  /* Vertical padding 0.3rem so the border-box card can hold one line of name
+     (1.54rem) + two lines of description (2 × 1.19rem) plus the 1px top+bottom
+     border inside the two-row height (≈4.68rem). Content math (border-box):
+     3.92 text + 0.6 padding + 0.125 border = 4.645rem, under it, so min-height
+     governs and every card renders at exactly two rows. (The old 0.4rem padding forgot the
+     border and overflowed the box to ~4.84rem, breaking the grid.) */
+  padding: 0.3rem 0.9rem;
+  /* Two rows of THE ROW (base.css :root) and the gap between them, so
+     card-box + the gap that follows = exactly two row pitches: the card spans
+     two side rows and every row BELOW it stays on the same grid as side rows
+     3, 4, 5… min- (not fixed) as a safety net; content is sized to never
+     exceed it. */
+  min-height: calc(2 * var(--row-h) + var(--row-gap));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 1rem;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+a.app-card:hover {
+  background: var(--surface);
+  /* light-dark() so the hover border flips with the manual theme toggle. */
+  border-color: light-dark(#1a5757, #5fa8a8);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.app-card__icon { width: 48px; height: 48px; border-radius: 10px; flex-shrink: 0; display: block; }
+/* A BARE GLYPH (the app's vendored favicon.svg) rather than the rasterized
+   PWA icon, which bakes its accent tile into the pixels. The tile is a
+   platform requirement of installable icons, not a property of the app, so
+   the card consumes the two facts the registry holds — glyph and accent —
+   and decides the tile here. The accent rides on the element as `--tile`;
+   this is THE ONE place that says whether the index paints it. Today it
+   does not (user decision 2026-10-10: transparent). To bring the tile back,
+   theme-aware if wanted: `background: var(--tile)` plus the ~12% inset the
+   rasterizer uses (`emoji_icons.raster.tiled_svg`). */
+.app-card__icon--glyph { background: transparent; }
+.app-card__body { flex: 1; min-width: 0; }
+/* Card body locked to exactly two text lines so card height is predictable
+   and baselines align with the side-column link list (which uses the same
+   1.4 line-height). Long names/descriptions truncate with an ellipsis. */
+.app-card__name {
+  /* Match the page-list and tier-nav link size (1.1rem) so the card name
+     reads at the same typographic tier as other navigable items on the page.
+     The card's icon + Open button already supply visual emphasis; the name
+     itself doesn't need to upsize to feel prominent. */
+  font-size: 1.1rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* THE APP'S OWN WORDMARK FACE on its card name (user decision 2026-10-11;
+   index_page's `wordmark` entry key, which also links the font from the
+   app's folder). The face and its weight ride in as custom properties; the
+   SIZE is decided here, where the card's two-line box is: the font grows by
+   the app's `scale` (Caveat at 1.27 matches the x-height of the 1.1rem UI
+   names beside it) but the line box is pinned to the 1.54rem the unscaled
+   name occupies (1.1rem × 1.4), so the card height arithmetic above holds.
+   A tall face overflows that box invisibly — its INK must fit (Caveat's
+   spans 0.93 em, 1.30rem at this size). The fallback paints until the
+   woff2 arrives (font-display: swap); the head preloads it. */
+.app-card__name--wordmark {
+  font-family: var(--wordmark-family);
+  font-weight: var(--wordmark-weight, 400);
+  font-size: calc(1.1rem * var(--wordmark-scale, 1));
+  line-height: 1.54rem;
+}
+.app-card__desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.4;
+  /* Up to two lines, then ellipsis. Tightened card padding frees enough
+     vertical space to fit two desc lines (at the original 1.4 line-height)
+     beneath the name without growing the 4.68rem baseline. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.app-card__open {
+  font-size: 0.8rem;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0.18rem 0.55rem;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+</style>
+<link rel="preload" href="lifespan-atlas/fonts/Caveat-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+<style>@font-face{font-family:"Caveat";font-weight:600;font-style:normal;font-display:swap;src:url("lifespan-atlas/fonts/Caveat-SemiBold.woff2") format("woff2")}</style>
+<script>// page-nav.js — shared in-page search + navigation wiring (was auto-toc.js).
+//
+// Two responsibilities, dispatched from DOM structure (no per-page opt-in):
+//
+//  1. Content pages with ≥2 <h2> direct children of .container:
+//     - Auto-injects <input class="filter"> + <nav class="toc"> right
+//       after .head-meta (or h1 if no head-meta).
+//     - Builds the TOC as a numbered list of h2 anchors.
+//     - Wires the filter to hide TOC items whose text doesn't match.
+//     - Collapses every section by default (site convention, user decision
+//       2026-08-15: any page with a Contents nav starts with its sections
+//       closed; this file is the SSOT for that behaviour). The h2 headings
+//       become toggles, TOC links / URL hashes expand their target, and a
+//       Expand-all button sits in the TOC header. Collapsing is done by
+//       classing each element BETWEEN h2s (never re-parenting — pages
+//       style via `.container > ul` etc. and a wrapper div would orphan
+//       them) with height:0/overflow:hidden/visibility:hidden rather than
+//       display:none, so embedded widgets (Leaflet maps, canvas engines)
+//       still measure real layout widths while hidden. Expanding a section
+//       dispatches a bubbling 'section-expanded' event on its h2 (pages
+//       use it to lazy-init heavy widgets) plus a window resize (Leaflet's
+//       trackResize picks it up).
+//     If the page already includes the markup (e.g. chinese-languages
+//     used to inline it), it is reused rather than re-injected.
+//
+//  2. Index pages (.container > .row > .main, with the build's existing
+//     <input class="filter"> above the row):
+//     - Wires that input to filter the index entries (.app-card cards
+//       AND .main > ul > li bare-link rows).
+//
+// Activate by linking this file from a page's <head>; the script
+// auto-runs on DOMContentLoaded. No globals leaked beyond what was
+// already there.
+
+(function () {
+  function slugify(s) {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  // ---- Collapsed-by-default sections --------------------------------
+  // Styles are injected here (not base.css) so the whole convention —
+  // behaviour + look — lives in this one file.
+  var COLLAPSE_STYLE_ID = '__page-nav-collapse-styles';
+  function injectCollapseStyles() {
+    if (document.getElementById(COLLAPSE_STYLE_ID)) return;
+    var style = document.createElement('style');
+    style.id = COLLAPSE_STYLE_ID;
+    style.textContent =
+      // Collapsed section members: zero the box but keep layout widths
+      // measurable (see header comment). !important intentionally beats
+      // page-level margin/padding rules.
+      '.pn-collapsed { visibility:hidden !important; height:0 !important;' +
+      '  min-height:0 !important; margin:0 !important; padding:0 !important;' +
+      '  border-width:0 !important; overflow:hidden !important; }' +
+      // h2 toggles: pointer + a right-aligned ▸/▾ marker, mirroring the
+      // .toc summary markers in base.css.
+      'h2.pn-toggle { cursor:pointer; }' +
+      'h2.pn-toggle::after { content:"\\25B8"; float:right; color:var(--muted); font-size:0.8em; }' +
+      'h2.pn-toggle[aria-expanded="true"]::after { content:"\\25BE"; }';
+    document.head.appendChild(style);
+  }
+
+  // Elements belonging to a section: everything after its h2 up to the
+  // next direct-child h2 (or the end of the container).
+  function sectionMembers(h2) {
+    var els = [];
+    for (var el = h2.nextElementSibling; el && el.tagName !== 'H2'; el = el.nextElementSibling) {
+      els.push(el);
+    }
+    return els;
+  }
+
+  function isCollapsed(h2) {
+    return h2.getAttribute('aria-expanded') !== 'true';
+  }
+
+  function setCollapsed(h2, collapsed) {
+    sectionMembers(h2).forEach(function (el) {
+      el.classList.toggle('pn-collapsed', collapsed);
+    });
+    h2.setAttribute('aria-expanded', String(!collapsed));
+    if (!collapsed) {
+      // Pages lazy-init heavy widgets on this; Leaflet maps built while
+      // hidden fix themselves via their window-resize listener.
+      h2.dispatchEvent(new CustomEvent('section-expanded', { bubbles: true }));
+      window.dispatchEvent(new Event('resize'));
+    }
+  }
+
+  function buildToc(container) {
+    // Direct h2 children only — nested h2s (e.g. inside <details>) don't
+    // earn TOC entries; they belong to whatever section wraps them.
+    var h2s = container.querySelectorAll(':scope > h2');
+    // 2+ h2s warrants a TOC. A single-section page is its own TOC.
+    if (h2s.length < 2) return;
+
+    // Reuse existing markup if present (chinese-languages legacy pattern),
+    // otherwise inject. Pre-placed markup may be hidden via inline style;
+    // we clear it after populating.
+    var search = container.querySelector(':scope > input.filter');
+    var injectedSearch = false;
+    if (!search) {
+      search = document.createElement('input');
+      search.type = 'search';
+      search.className = 'filter';
+      search.placeholder = 'Search…';
+      search.setAttribute('aria-label', 'Filter sections');
+      injectedSearch = true;
+    }
+    var toc = container.querySelector(':scope > nav.toc');
+    var injectedToc = false;
+    if (!toc) {
+      toc = document.createElement('nav');
+      toc.className = 'toc';
+      var header = document.createElement('div');
+      header.className = 'toc-header';
+      var h2c = document.createElement('h2');
+      h2c.textContent = 'Contents';
+      header.appendChild(h2c);
+      toc.appendChild(header);
+      var ol = document.createElement('ol');
+      toc.appendChild(ol);
+      injectedToc = true;
+    }
+    var list = toc.querySelector('ol') || toc.querySelector('ul');
+    if (!list) return;
+
+    // Populate. textContent excludes ::before-rendered counters (e.g. the
+    // page-side .container > h2::before "1. " prefix) so we get just the
+    // heading words and prepend our own monotonic index. h2.appendix
+    // sections (the {{EXTERNAL_LINKS}} link lists) letter as A. B. …
+    // instead, mirroring base.css's on-page prefixes.
+    list.innerHTML = '';
+    var idx = 0, appendixIdx = 0;
+    h2s.forEach(function (h) {
+      var orig = h.textContent.trim();
+      if (!h.id) h.id = slugify(orig);
+      var label = h.classList.contains('appendix')
+        ? String.fromCharCode(65 + (appendixIdx++ % 26))
+        : String(++idx);
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + h.id;
+      a.textContent = label + '. ' + orig;
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+
+    // Place injected nodes: head-meta → search → toc → first h2.
+    if (injectedSearch || injectedToc) {
+      var anchor = container.querySelector(':scope > p.head-meta')
+        || container.querySelector(':scope > h1');
+      if (anchor) {
+        if (injectedSearch) anchor.insertAdjacentElement('afterend', search);
+        var searchEnd = injectedSearch ? search : anchor;
+        if (injectedToc) searchEnd.insertAdjacentElement('afterend', toc);
+      }
+    }
+    // Reveal anything that was pre-rendered hidden.
+    if (search.style.display === 'none') search.style.display = '';
+    if (toc.style.display === 'none') toc.style.display = '';
+
+    search.addEventListener('input', function () {
+      var q = this.value.trim().toLowerCase();
+      list.querySelectorAll('li').forEach(function (li) {
+        if (!q) { li.classList.remove('search-hidden'); return; }
+        li.classList.toggle('search-hidden', li.textContent.toLowerCase().indexOf(q) === -1);
+      });
+    });
+
+    // ---- Collapse sections by default -------------------------------
+    injectCollapseStyles();
+
+    // Expand-all / Collapse-all in the TOC header (styles for
+    // .toc-controls/.toc-toggle-btn already live in base.css). Pre-placed
+    // TOC markup may lack a header; skip the button there.
+    var headerEl = toc.querySelector('.toc-header');
+    var allBtn = null;
+    function syncAllBtn() {
+      if (!allBtn) return;
+      var anyCollapsed = false;
+      h2s.forEach(function (h) { if (isCollapsed(h)) anyCollapsed = true; });
+      allBtn.textContent = anyCollapsed ? 'Expand all' : 'Collapse all';
+    }
+    if (headerEl && !headerEl.querySelector('.toc-toggle-btn')) {
+      var controls = document.createElement('div');
+      controls.className = 'toc-controls';
+      allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'toc-toggle-btn';
+      controls.appendChild(allBtn);
+      headerEl.appendChild(controls);
+      allBtn.addEventListener('click', function () {
+        var expand = allBtn.textContent === 'Expand all';
+        h2s.forEach(function (h) { setCollapsed(h, !expand); });
+        syncAllBtn();
+      });
+    }
+
+    // Every h2 becomes a keyboard-reachable toggle, starting collapsed.
+    h2s.forEach(function (h) {
+      h.classList.add('pn-toggle');
+      h.tabIndex = 0;
+      function toggle() { setCollapsed(h, !isCollapsed(h)); syncAllBtn(); }
+      h.addEventListener('click', toggle);
+      h.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      });
+      setCollapsed(h, true);
+    });
+    syncAllBtn();
+
+    // Navigating to #some-section (TOC click, external link, page load
+    // with a hash) expands the target. The load-time call re-scrolls too:
+    // the browser's native hash scroll happened before we collapsed
+    // everything, so the position it picked is stale.
+    function expandHashTarget(scroll) {
+      var id = decodeURIComponent((location.hash || '').slice(1));
+      if (!id) return;
+      var h = document.getElementById(id);
+      if (!h || h.tagName !== 'H2' || h.parentElement !== container) return;
+      if (isCollapsed(h)) { setCollapsed(h, false); syncAllBtn(); }
+      if (scroll) h.scrollIntoView();
+    }
+    window.addEventListener('hashchange', function () { expandHashTarget(false); });
+    // Same-hash TOC clicks fire no hashchange — expand from the click too.
+    list.addEventListener('click', function (e) {
+      var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+      if (!a) return;
+      var h = document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+      if (h && isCollapsed(h)) { setCollapsed(h, false); syncAllBtn(); }
+    });
+    expandHashTarget(true);
+  }
+
+  function wireIndexSearch(container) {
+    // Build.py emits: <input class="filter" ...> above <div class="row">
+    // <div class="main"> with .app-card / <ul><li> entries.
+    var filter = container.querySelector(':scope > input.filter');
+    if (!filter) return;
+    var main = container.querySelector('.row > .main');
+    if (!main) return;
+    var targets = main.querySelectorAll('.app-card, ul > li');
+    if (!targets.length) return;
+    filter.addEventListener('input', function () {
+      var q = this.value.trim().toLowerCase();
+      targets.forEach(function (t) {
+        if (!q) { t.classList.remove('search-hidden'); return; }
+        t.classList.toggle('search-hidden', t.textContent.toLowerCase().indexOf(q) === -1);
+      });
+    });
+  }
+
+  function init() {
+    var container = document.querySelector('.container');
+    if (!container) return;
+    // Index pages have the row-and-main layout; content pages don't.
+    if (container.querySelector(':scope > .row > .main')) {
+      wireIndexSearch(container);
+    } else {
+      buildToc(container);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</head>
+<body>
+<div class="container">
+<nav class="breadcrumb" aria-label="Breadcrumb"><span aria-current="page">Protected Index</span></nav>
+<h1>Lifespan Atlas</h1>
+<p class="head-meta"><a href="stats/">108,211 lines 📊</a> ✦ Last updated <time datetime="2026-10-18T12:51:15Z" title="2026-10-18 12:51 UTC" class="relative-time">2026-10-18</time></p>
+<div class="filter-row">
+  <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
+  <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
+    <option value="../public/">Index</option>
+    <option value="" selected>Protected Index</option>
+  </select>
+</div>
+<div class="row">
+<div class="main">
+<div class="row-group">Apps</div>
+<div class="apps">
+  <a class="app-card" href="lifespan-atlas/" target="_blank" rel="noopener">
+    <img class="app-card__icon app-card__icon--glyph" src="data:image/svg+xml;base64,PCEtLSBGbHVlbnQgRW1vamkgIkNvbXBhc3MiIOKAlCBnaXRodWIuY29tL21pY3Jvc29mdC9mbHVlbnR1aS1lbW9qaSBAIDYyZWNkYzAsIE1JVCBsaWNlbnNlIC0tPg0KPHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4NCjxwYXRoIGQ9Ik0xNS41IDI4QzIxLjg1MTMgMjggMjcgMjIuODUxMyAyNyAxNi41QzI3IDEwLjE0ODcgMjEuODUxMyA1IDE1LjUgNUM5LjE0ODczIDUgNCAxMC4xNDg3IDQgMTYuNUM0IDIyLjg1MTMgOS4xNDg3MyAyOCAxNS41IDI4WiIgZmlsbD0iI0Y0RjRGNCIvPg0KPHBhdGggZD0iTTI1Ljc2NjMgNy43MzI5OEMyNi4xNDMxIDcuOTA0NCAyNi41NjA5IDggMjcgOEMyOC42NSA4IDMwIDYuNjUgMzAgNUMzMCAzLjM1IDI4LjY1IDIgMjcgMkMyNS4zNSAyIDI0IDMuMzUgMjQgNUMyNCA1LjQzOTA5IDI0LjA5NTYgNS44NTY5MyAyNC4yNjcgNi4yMzM3M0MyMS45MDgzIDQuMjE3NTIgMTguODQ2MyAzIDE1LjUgM0M4LjA0NDE2IDMgMiA5LjA0NDE2IDIgMTYuNUMyIDIzLjk1NTggOC4wNDQxNiAzMCAxNS41IDMwQzIyLjk1NTggMzAgMjkgMjMuOTU1OCAyOSAxNi41QzI5IDEzLjE1MzcgMjcuNzgyNSAxMC4wOTE3IDI1Ljc2NjMgNy43MzI5OFpNMjUuMzkgNC45OUMyNS4zOSA0LjEgMjYuMTEgMy4zOCAyNyAzLjM4QzI3Ljg4IDMuMzggMjguNjEgNC4xIDI4LjYxIDQuOTlDMjguNjEgNS44OCAyNy44OSA2LjYgMjcgNi42QzI2LjExIDYuNiAyNS4zOSA1Ljg4IDI1LjM5IDQuOTlaTTI2IDE2LjVDMjYgMjIuMjk5IDIxLjI5OSAyNyAxNS41IDI3QzkuNzAxMDEgMjcgNSAyMi4yOTkgNSAxNi41QzUgMTAuNzAxIDkuNzAxMDEgNiAxNS41IDZDMjEuMjk5IDYgMjYgMTAuNzAxIDI2IDE2LjVaIiBmaWxsPSIjRjlDMjNDIi8+DQo8cGF0aCBkPSJNMjUuMzUgNy45OTk5NEwyMy45OSA2LjYzOTk0TDI1LjM1IDUuMjc5OTRDMjUuNzIgNC45MDk5NCAyNi4zMyA0LjkwOTk0IDI2LjcxIDUuMjc5OTRDMjcuMDggNS42NDk5NCAyNy4wOCA2LjI1OTk0IDI2LjcxIDYuNjM5OTRMMjUuMzUgNy45OTk5NFoiIGZpbGw9IiNGRkIwMkUiLz4NCjxwYXRoIGQ9Ik0xMy4yMjM0IDE3LjcyNEwxMS40MDk5IDIwLjIxQzExLjIyOTkgMjAuNDUgMTEuNTI5OSAyMC43NSAxMS43Nzk5IDIwLjU4TDE0LjI3MzUgMTguNzYwOUwxNS4yMDk5IDI0Ljc0OTlDMTUuMjU5OSAyNS4wNzk5IDE1LjczOTkgMjUuMDc5OSAxNS43ODk5IDI0Ljc0OTlMMTYuODY2MyAxNy44NjYzTDIzLjc0OTkgMTYuNzg5OUMyNC4wNzk5IDE2LjczOTkgMjQuMDc5OSAxNi4yNTk5IDIzLjc0OTkgMTYuMjA5OUwxNy43NjA5IDE1LjI3MzVMMTkuNTc5OSAxMi43OEMxOS43NTk5IDEyLjU0IDE5LjQ1OTkgMTIuMjQgMTkuMjA5OSAxMi40MUwxNi43MjQgMTQuMjIzNEwxNS43ODk5IDguMjQ5OTRDMTUuNzM5OSA3LjkxOTk0IDE1LjI1OTkgNy45MTk5NCAxNS4yMDk5IDguMjQ5OTRMMTQuMTMzNiAxNS4xMzM2TDcuMjQ5OTQgMTYuMjA5OUM2LjkxOTk0IDE2LjI1OTkgNi45MTk5NCAxNi43Mzk5IDcuMjQ5OTQgMTYuNzg5OUwxMy4yMjM0IDE3LjcyNFoiIGZpbGw9IiM5QjlCOUIiLz4NCjxwYXRoIGQ9Ik0xNy4zMzgyIDE1TDIwLjkzOTMgMjEuMzI3MUMyMS4xNjMxIDIxLjcyNTUgMjAuNzI1MiAyMi4xNjI5IDIwLjMyNjEgMjEuOTM5NEwxNCAxOC4zMzM2TDE3LjMzODIgMTVaIiBmaWxsPSIjOUI5QjlCIi8+DQo8cGF0aCBkPSJNMTMuNjc1NiAxOEwxMC4wNjA1IDExLjY3MkM5LjgzNzU2IDExLjI3NDEgMTAuMjczNyAxMC44MzczIDEwLjY3MTEgMTEuMDYwNkwxNyAxNC42NzFMMTMuNjc1NiAxOFoiIGZpbGw9IiNFNTMzNkQiLz4NCjxwYXRoIGQ9Ik0xNS41IDE5QzE2Ljg4MDcgMTkgMTggMTcuODgwNyAxOCAxNi41QzE4IDE1LjExOTMgMTYuODgwNyAxNCAxNS41IDE0QzE0LjExOTMgMTQgMTMgMTUuMTE5MyAxMyAxNi41QzEzIDE3Ljg4MDcgMTQuMTE5MyAxOSAxNS41IDE5WiIgZmlsbD0iI0QzRDNEMyIvPg0KPC9zdmc+DQo=" alt="" style="--tile: #33383D" />
+    <div class="app-card__body">
+      <div class="app-card__name app-card__name--wordmark" style="--wordmark-family: 'Caveat', cursive; --wordmark-weight: 600; --wordmark-scale: 1.27">Lifespan Atlas</div>
+      <div class="app-card__desc">Personal life timeline and lifespan visualization</div>
+    </div>
+    <div class="app-card__open">Open</div>
+  </a>
+</div>
+</div>
+<div class="side">
+<ul>
+  <li class="row-group">Links</li>
+  <li>
+    <a class="app-card" href="/personal-website/contents/pages/protected/" target="_blank" rel="noopener">
+      <img class="app-card__icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MiIgeT0iNDkiIGZvbnQtc2l6ZT0iOTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIj7wn5u4PC90ZXh0Pjwvc3ZnPgo=" alt="" />
+      <div class="app-card__body">
+        <div class="app-card__name">Protected Index</div>
+        <div class="app-card__desc">The protected tier of the personal website</div>
+      </div>
+      <div class="app-card__open">Open</div>
+    </a>
+  </li>
+</ul>
+</div>
+</div>
+</div>
+<script>window.__indexTopicKinds=[];</script>
+<script>
+(function() {
+  // Convert <time class="relative-time" datetime="..."> to "X ago" form.
+  // Fallback (no JS) is the absolute YYYY-MM-DD already in the element body.
+  const ago = (n, unit) => `${n} ${unit}${n === 1 ? '' : 's'} ago`;
+  const fmt = (s) => {
+    if (s < 5) return 'just now';
+    if (s < 60) return `${s} seconds ago`;
+    if (s < 3600) return ago(Math.floor(s / 60), 'minute');
+    if (s < 86400) return ago(Math.floor(s / 3600), 'hour');
+    if (s < 1209600) return ago(Math.floor(s / 86400), 'day');
+    if (s < 5443200) return ago(Math.floor(s / 604800), 'week');
+    if (s < 31557600) return ago(Math.floor(s / 2629800), 'month');
+    return ago(Math.floor(s / 31557600), 'year');
+  };
+  const fmtCoarse = (dt) => {
+    const now = new Date();
+    const e = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+    const r = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const diffDays = Math.round((e - r) / 86400000);
+    if (diffDays === 0) return 'today';
+    if (diffDays === -1) return 'yesterday';
+    const future = diffDays > 0;
+    const absDays = Math.abs(diffDays);
+    if (absDays < 60) {
+      const body = `${absDays} day${absDays === 1 ? '' : 's'}`;
+      return future ? `in ${body}` : `${body} ago`;
+    }
+    const earlier = future ? new Date(r) : dt;
+    const later = future ? dt : new Date(r);
+    let years = later.getUTCFullYear() - earlier.getUTCFullYear();
+    let months = later.getUTCMonth() - earlier.getUTCMonth();
+    if (later.getUTCDate() < earlier.getUTCDate()) months -= 1;
+    if (months < 0) { years -= 1; months += 12; }
+    const body = years === 0 ? `${months}mo` : `${years}yr ${months}mo`;
+    return future ? `in ${body}` : `${body} ago`;
+  };
+  document.querySelectorAll('time.relative-time').forEach(t => {
+    const dt = new Date(t.getAttribute('datetime'));
+    if (isNaN(dt.getTime())) return;
+    if (t.classList.contains('relative-time-coarse')) {
+      t.textContent = fmtCoarse(dt);
+    } else {
+      const seconds = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
+      t.textContent = fmt(seconds);
+    }
+  });
+})();
+(function() {
+  const f = document.querySelector('.filter');
+  if (!f) return;
+  const items = document.querySelectorAll('.main .app-card, .main > ul > li');
+  f.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase().trim();
+    items.forEach(item => {
+      const name = (item.querySelector('.app-card__name') || item).textContent.toLowerCase();
+      item.classList.toggle('search-hidden', q.length > 0 && !name.includes(q));
+    });
+  });
+  f.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const q = f.value.toLowerCase().trim();
+    if (!q) return;
+    const opt = Array.from(document.querySelectorAll('.tier-nav option'))
+      .find(o => o.value && o.textContent.toLowerCase().split(/\s+/).includes(q));
+    if (opt) { e.preventDefault(); location.href = opt.value; }
+  });
+})();
+(function() {
+  // A group heading owns the run of rows between it and the next heading. When
+  // every one of those is hidden the heading is left captioning nothing, so it
+  // hides too. Two ways to get there: a group holding only teaser rows whose
+  // switch is off, and — true long before teasers were grouped — a text or
+  // category filter that excluded every row under one heading.
+  //
+  // RECOMPUTED FROM THE LAYOUT, not tracked. Three independent things hide a
+  // row (the reveal rules keyed off <html data-show-*>, .search-hidden,
+  // .cat-hidden) and none of them knows about the others; asking whether the
+  // element has any box is the single answer that accounts for all three.
+  const heads = document.querySelectorAll(
+    '.main > ul > li.row-group, .side > ul > li.row-group');
+  if (!heads.length) return;
+  const sync = () => {
+    heads.forEach(h => {
+      let any = false;
+      for (let n = h.nextElementSibling;
+           n && !n.classList.contains('row-group');
+           n = n.nextElementSibling) {
+        if (n.getClientRects().length) { any = true; break; }
+      }
+      // Written only when it actually changes — this callback runs inside the
+      // observer watching the very attribute it would set, so an
+      // unconditional toggle risks a write/notify loop.
+      if (h.classList.contains('row-group--empty') === any) {
+        h.classList.toggle('row-group--empty', !any);
+      }
+    });
+  };
+  sync();
+  // The filters toggle classes on the rows; the teaser switches toggle a
+  // data- attribute on <html>. One observer covers both.
+  new MutationObserver(sync).observe(document.documentElement, {
+    attributes: true, subtree: true,
+    attributeFilter: ['class', 'data-show-planned'],
+  });
+})();
+(function() {
+  // Category chips: multi-select, OR semantics — an entry stays visible
+  // while it carries ANY active category; no active chips means show all.
+  // Hides non-matching entries via .cat-hidden — a class deliberately
+  // separate from .search-hidden, so the text search and the category
+  // filter compose as AND without stomping each other's state.
+  const chips = document.querySelectorAll('.cat-chips .cat-chip');
+  if (!chips.length) return;
+  const items = document.querySelectorAll('.main .app-card, .main > ul > li');
+  const clear = document.querySelector('.cat-chips__clear');
+  const body = document.querySelector('.cat-chips__body');
+  const toggle = document.querySelector('.cat-chips__toggle');
+  const updateToggle = (activeCount) => {
+    if (!toggle || !body) return;
+    const open = !body.hidden;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.textContent = open ? 'Filter ▾'
+      : (activeCount ? `Filter (${activeCount}) ▸` : 'Filter ▸');
+  };
+  const apply = () => {
+    const active = Array.from(chips)
+      .filter(c => c.getAttribute('aria-pressed') === 'true')
+      .map(c => c.dataset.cat);
+    items.forEach(item => {
+      const cats = (item.dataset.categories || '').split(' ').filter(Boolean);
+      item.classList.toggle('cat-hidden',
+        active.length > 0 && !active.some(c =>
+          c === '__none__' ? cats.length === 0 : cats.includes(c)));
+    });
+    if (clear) clear.hidden = active.length === 0;
+    updateToggle(active.length);
+  };
+  if (toggle && body) toggle.addEventListener('click', () => {
+    body.hidden = !body.hidden;
+    apply();
+  });
+  chips.forEach(chip => chip.addEventListener('click', () => {
+    const on = chip.getAttribute('aria-pressed') === 'true';
+    chip.setAttribute('aria-pressed', on ? 'false' : 'true');
+    apply();
+  }));
+  if (clear) clear.addEventListener('click', () => {
+    chips.forEach(c => c.setAttribute('aria-pressed', 'false'));
+    apply();
+  });
+})();
+(function() {
+  // Teaser-row reveal. The head snippet stamps <html data-show-KIND> once at
+  // load; this keeps the on-page switch, the attribute, and other pages in
+  // agreement — re-stamping on switch clicks, back/forward-cache restores and
+  // cross-page storage changes (the website's Settings checkbox remains a
+  // synced second control for the planned half).
+  //
+  // ONE implementation, run per kind — planned, dev, and any topic.
+  const wire = (kind) => {
+    // Bail only when there is genuinely nothing to do. This used to test for
+    // a `.<kind>-row` alone, which broke the moment a teaser stopped being a
+    // row: a planned APP renders as `.app-card--planned` (2026-09-06), so on
+    // a tier whose only planned entry is an app there were no rows, the wire
+    // returned early, and the switch sat there doing nothing.
+    //
+    // The switch ITSELF is now reason enough to wire — it is a fixture on
+    // every website index whether or not that tier has anything to reveal
+    // yet, and an inert-looking control that silently does nothing is worse
+    // than one that flips an attribute nothing matches.
+    const sw = document.querySelector('.' + kind + '-switch');
+    const revealable = document.querySelector(
+      '.' + kind + '-row, .app-card--' + kind + ', .' + kind + '-entry');
+    if (!sw && !revealable) return;
+    const K = 'site-show-' + kind;
+    const ATTR = 'data-show-' + kind;
+    const stamp = () => {
+      const on = localStorage.getItem(K) === 'on';
+      document.documentElement.toggleAttribute(ATTR, on);
+      if (sw) sw.setAttribute('aria-pressed', on ? 'true' : 'false');
+    };
+    if (sw) sw.addEventListener('click', () => {
+      if (localStorage.getItem(K) === 'on') localStorage.removeItem(K);
+      else localStorage.setItem(K, 'on');
+      stamp();
+    });
+    stamp();
+    window.addEventListener('pageshow', (e) => { if (e.persisted) stamp(); });
+    window.addEventListener('storage', (e) => {
+      if (e.key === K || e.key === null) stamp();
+    });
+  };
+  wire('planned');
+  // 'dev' rides the same wiring, and needs it for a reason the other two do
+  // not have: its ONLY control lives on the Settings page, so without the
+  // storage listener below an index already open kept showing the developer
+  // entries until it was reloaded. The keys line up by construction —
+  // site-show-dev / data-show-dev / .dev-entry — which is why this is one
+  // more call rather than a second mechanism.
+  wire('dev');
+  // Topic switches ride the same wiring for the same reason as 'dev': their
+  // only control is on the (private) Settings page. The kinds present on
+  // this page are stamped as a global by the generator, one line above.
+  (window.__indexTopicKinds || []).forEach(wire);
+})();
+</script>
+</body>
+</html>
