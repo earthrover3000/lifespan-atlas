@@ -1,0 +1,491 @@
+/* Docs-page-specific styles (site-map, site-stats, lifespan-atlas plan).
+   Layered on top of base.css — theme tokens, body, h1, .head-meta,
+   .container, .back-link live there. This file owns the docs-specific
+   surfaces: TOC, content sections, tables, edit-mode controls. */
+
+/* ---- Doc-specific theme tokens (status-pill tag colours) ----
+   Each pair via light-dark(light, dark); follows `color-scheme` (set on :root
+   by base.css), so the manual theme toggle flips the pills too. */
+:root {
+  --tag-green:       light-dark(#d4edda, #2a4a2a);
+  --tag-green-text:  light-dark(#1e6b32, #7ecb7e);
+  --tag-blue:        light-dark(#d0e4f7, #1e2e4a);
+  --tag-blue-text:   light-dark(#1a4a7a, #7eb8f5);
+  --tag-red:         light-dark(#fde0de, #4a1e1e);
+  --tag-red-text:    light-dark(#8b1a14, #f5857e);
+  --tag-yellow:      light-dark(#fff3cd, #4a3e1a);
+  --tag-yellow-text: light-dark(#7a5200, #f5d07e);
+  --tag-teal:        light-dark(#d0f0ee, #1a3e3e);
+  --tag-teal-text:   light-dark(#1a5a54, #7ecfc4);
+  /* Indigo is the agent axis's, and its own colour for a reason: it sits
+     directly beside a stage chip, so borrowing blue (near-identical to teal in
+     this palette, and `next` is teal) would have read as a fourth rung of the
+     ladder rather than a second axis. */
+  --tag-indigo:      light-dark(#e0dcf7, #2c2547);
+  --tag-indigo-text: light-dark(#4b3a99, #b3a7f0);
+}
+
+/* ---- Page-level extras ---- */
+.subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2.5rem; }
+.loading { text-align: center; color: var(--muted); padding: 3rem; font-size: 1.1rem; }
+[contenteditable="true"] { outline: none; }
+
+/* ---- Tables (shell from base.css; docs adds spacing + colors) ---- */
+table { margin-top: 0.5rem; }
+th { background: var(--border); color: var(--muted); font-size: 0.82rem; text-align: left; padding: 0.5rem 0.8rem; }
+td { padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+tr:last-child td { border-bottom: none; }
+
+/* ---- TOC content-specific bits (generic .toc styles live in base.css) ---- */
+/* Built / not-built dot between path and human label on each TOC leaf.
+   🟢 = deployed, ⚪ = not. Emojis carry their own color, so no `color` rule. */
+.toc .built-indicator { margin: 0 0.4rem; font-size: 0.85em; }
+
+/* ---- Sections & headings ---- */
+section { margin-bottom: 3rem; }
+/* Heading hierarchy adopted from chinese-languages's pattern (the canonical
+   typographic example on the site):
+   - h2 sections: 1.2rem, plain text color, slim border-bottom
+   - h3 subsections: accent color, font-weight 600
+   - h4–h6: smaller, plain text, no monospace (Segoe UI inherited from body) */
+h2.section-title { font-size: 1.2rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin: 2rem 0 0.6rem; }
+h3.page-h3 { color: var(--accent); font-size: 1rem; font-weight: 600; margin: 1.2rem 0 0.3rem; }
+h4.page-h4 { font-size: 0.95rem; color: var(--text); font-weight: 600; margin: 1rem 0 0.4rem; }
+h5.page-h5 { font-size: 0.92rem; color: var(--text); font-weight: 600; margin: 1rem 0 0.4rem; }
+h6.page-h6 { font-size: 0.88rem; color: var(--text); font-weight: 600; margin: 0.8rem 0 0.3rem; }
+
+/* ---- Entry counts (plan-chrome.js updateCounts) ----
+   A muted "(n)" after every heading and TOC row that has entries beneath it.
+   Drawn from `data-count` rather than as text, so the number never enters a
+   heading's textContent — which the save path reads back as the title. The
+   attribute follows the stage filter, so the number is what is showing now.
+   Only ::after: ::before on these carries the section letter / numbering. */
+h2.section-title[data-count]::after,
+.page-h3[data-count]::after, .page-h4[data-count]::after,
+.page-h5[data-count]::after, .page-h6[data-count]::after,
+.toc a[data-count]::after {
+  content: " (" attr(data-count) ")";
+  color: var(--muted); font-size: 0.8rem; font-weight: normal;
+}
+/* The page total on the TOC's "Contents" header. Same badge; the header is
+   spaced small-caps (base.css .toc h2), which a number should not inherit. */
+.toc-header > h2[data-count]::after {
+  content: " (" attr(data-count) ")";
+  letter-spacing: normal; font-weight: normal;
+}
+/* Per-stage totals on the filter chips — the whole page, not the filtered
+   view (see updateCounts). The chip's own colour carries; the number drops
+   the bold so the token stays the thing you read first. */
+.filter-btn[data-count]::after {
+  content: " (" attr(data-count) ")";
+  font-weight: normal; opacity: 0.85;
+}
+
+/* ---- Section numbering (default: flat sections) ----
+   Trailing dot on every level: "1." / "2.1." / "3.1.1." etc. */
+/* The section level (s1) is a mnemonic LETTER set per-section from JS as the
+   `--sl` custom property (e.g. "I" for Infrastructure); CSS can't derive that
+   from the title, so it's fed in. Sub-levels stay numeric counters. Falls back
+   to the numeric counter if --sl is ever unset. */
+.container { counter-reset: s1; }
+section { counter-increment: s1; counter-reset: s2; }
+h2.section-title::before { content: var(--sl, counter(s1)) ". "; }
+h3.page-h3 { counter-increment: s2; counter-reset: s3; }
+h3.page-h3::before { content: var(--sl, counter(s1)) "." counter(s2) ". "; }
+h4.page-h4 { counter-increment: s3; counter-reset: s4; }
+h4.page-h4::before { content: var(--sl, counter(s1)) "." counter(s2) "." counter(s3) ". "; }
+h5.page-h5 { counter-increment: s4; counter-reset: s5; }
+h5.page-h5::before { content: var(--sl, counter(s1)) "." counter(s2) "." counter(s3) "." counter(s4) ". "; }
+h6.page-h6 { counter-increment: s5; }
+h6.page-h6::before { content: var(--sl, counter(s1)) "." counter(s2) "." counter(s3) "." counter(s4) "." counter(s5) ". "; }
+
+/* ---- Page status badges ---- */
+.page-status {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: 0.6rem;
+  vertical-align: middle;
+}
+.page-status.live { background: var(--tag-green); color: var(--tag-green-text); }
+.page-status.wip { background: var(--tag-teal); color: var(--tag-teal-text); }
+.page-status.planned { background: var(--border); color: var(--muted); }
+.page-status.meta { background: var(--tag-blue); color: var(--tag-blue-text); }
+
+/* ---- List items ---- */
+ul { padding-left: 1.4rem; }
+li { margin: 0.3rem 0; color: var(--text); }
+section li { list-style: none; display: flex; align-items: baseline; flex-wrap: wrap; }
+/* Layout: number on the LEFT, content, then the stage tag on the RIGHT — the same
+   "content-left / status-right" alignment the flat cards use. `li-text` grows to
+   push the tag to the right edge. */
+section li > .num { order: 0; flex-shrink: 0; margin-right: 0.4rem; color: var(--muted); font-size: 0.85em; font-variant-numeric: tabular-nums; }
+section li::before { content: "\2022"; order: 0; flex-shrink: 0; margin-right: 0.4rem; color: var(--muted); }
+section li:has(> .num)::before { content: none; }
+section li > .drag-handle { order: 1; }
+section li > .li-text { order: 2; flex: 1; min-width: 0; }
+section li > .li-controls { order: 3; }
+section li > .tag { order: 4; margin-left: 0.5rem; }
+.drag-handle, .tag, .li-controls { flex-shrink: 0; }
+/* The Chinese twin — stacked on its own line under the English, tight + muted. */
+.zh { display: block; color: var(--muted); font-size: 0.85em; line-height: 1.3; margin-top: 1px; }
+/* Optional short title on an entry — bold, on its own line above the summary. */
+.li-title { display: block; font-weight: 600; }
+.li-title > .zh { font-weight: 400; }
+li.hidden { display: none; }
+
+/* Hover highlight on an entry row. Painted with a SPREAD SHADOW in the same
+   colour as the fill rather than with padding, so the band gets its breathing
+   room without any box growing — padding here would have loosened the line
+   spacing of every plan page to buy a hover state.
+
+   var(--surface) over the page's var(--bg) is a lift in both themes by
+   construction (#fff on #f5f5f5, #1a1a1a on #0f0f0f), so this needs no
+   light-dark() pair of its own.
+
+   EVERY entry, not just the ones that open: which row the cursor is on is a
+   reading aid, and scoping it to li.has-detail would quietly hand back the
+   marker that was deliberately dropped (see .li-detail above). A row mid-drag
+   is the exception — it is already at 0.25 opacity and being followed by the
+   drop indicators, so a highlight there is noise. */
+/* A row that is NOT a card: the lift is painted outward with a spread shadow
+   so the band gets breathing room without any box growing. */
+section li:not(.plan-mini):hover,
+section li:not(.plan-mini).selected { background: var(--surface); box-shadow: 0 0 0 0.35rem var(--surface); border-radius: 2px; }
+
+/* A row that IS a card already has its own surface, border and radius, so it
+   lifts the way a card lifts. The spread-shadow trick would paint a square
+   halo straight through the 8px corners. */
+section li.plan-mini:hover { border-color: var(--muted); box-shadow: 0 2px 8px rgba(0,0,0,0.10); }
+
+/* SELECTED persists after the pointer leaves, so you keep your place while
+   reading a long body (user decision 2026-08-25). One row at a time; the
+   accent border says which, and outlives the hover that a mouse-move erases. */
+section li.plan-mini.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+section li.plan-mini.selected:hover { box-shadow: 0 0 0 1px var(--accent), 0 2px 8px rgba(0,0,0,0.10); }
+
+/* The named stage ladder's colours on a card's left edge — the same three the
+   tags carry, in their saturated (text) form so a 3px edge still reads. A
+   version token gets its computed hue set inline instead; no stage at all
+   falls through to planner-cards.css's neutral border. */
+section li.stage-now   { --stage-color: var(--tag-green-text); }
+section li.stage-next  { --stage-color: var(--tag-teal-text); }
+section li.stage-later { --stage-color: var(--tag-yellow-text); }
+
+section li.dragging:hover { background: none; box-shadow: none; }
+
+/* Planner mini-cards come from the shared planner-cards.css (`.plan-mini`, added
+   to entry <li>s by site-map.html) — the single source both the site map and the
+   flat plan.html draw their card look from. Here we just map its `--pc-*` tokens
+   onto THIS site's theme, so the cards use the same surfaces as everything else
+   and follow the dark/light toggle. */
+:root {
+  --pc-surface: var(--surface);
+  --pc-border:  var(--border);
+  --pc-text:    var(--text);
+  --pc-muted:   var(--muted);
+  --pc-chip:    var(--surface);
+}
+
+/* ---- Tags ---- */
+.tag { display: inline-block; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; margin-right: 0.3rem; font-weight: 600; text-indent: 0; }
+/* Version status tags — colour comes from PlanOrder.versionColors: TWO hue
+   series by major version (only two majors are ever shown together), hue-stepped
+   within a series so related versions stay one family yet read as distinct. The
+   plan renderer sets that hue inline as the background; here we only carry the
+   shared chrome (white text, fixed width). unset stays neutral. */
+.tag.planv, .tag.planstage, .tag.unset { width: 3.4rem; text-align: center; }
+.tag.planv, .filter-btn.planv { color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+.tag.unset { background: var(--border); color: var(--muted); }
+
+/* Named stage ladder (引擎 Engines/plan-order/stages.json) — the axis every
+   plan that is NOT the website's tags against. Authored here rather than
+   generated like the version hues above, because unlike versions these are a
+   fixed three with fixed meanings: they never arrive, retire or renumber, so
+   there is no series for a formula to walk.
+
+   The palette is the one the Personal Apps App List carried before the shared
+   skin went version-colours-only ("The shared docs.css now colours version
+   tags only, so restate the status tag + filter colours here" — it restated
+   them, and every other plan page went grey). `next` keeps that page's teal
+   exactly; green and yellow come off the same three-tag set, mapped onto the
+   ladder so the run green → teal → yellow → grey reads as attention cooling:
+   in progress, up next, not scheduled, no stage at all.
+
+   PlanOrder.stageClass builds the class name, so a fourth rung is one entry in
+   stages.json plus one line here. */
+.tag.stage-now,    .filter-btn.stage-now    { background: var(--tag-green);  color: var(--tag-green-text); }
+.tag.stage-next,   .filter-btn.stage-next   { background: var(--tag-teal);   color: var(--tag-teal-text); }
+.tag.stage-later,  .filter-btn.stage-later  { background: var(--tag-yellow); color: var(--tag-yellow-text); }
+/* The agent axis (page-widgets/plan-chrome.js, the AGENT block) — whether
+   an entry is a candidate for a long unattended agent run. A SECOND chip on
+   the same row as the stage one, never a rung of it: they answer different
+   questions and an entry carries both.
+
+   No fixed width, unlike the stage chips above. Those are a column of
+   interchangeable tokens and align as one; this one hangs off the right of
+   whichever stage chip precedes it, so a width would only pad the hole out to
+   the size of `overnight`.
+
+   THE UNSET STATE IS INVISIBLE WHILE READING, and since 2026-09-07 it is also
+   the only other state: `overnight` or nothing, where nothing means NOT a
+   candidate. An absence should not put a chip on all several hundred leaves
+   that are simply not overnight work. Edit mode brings it back as an outline
+   you can click, because a state with no chip is a state the toggle can never
+   reach. (A grey `agent-no` chip lived here for one day, for a token that no
+   longer exists.) */
+.tag.agent-overnight { background: var(--tag-indigo); color: var(--tag-indigo-text); }
+.tag.agent-unset { display: none; }
+.editing .tag.agent-unset {
+  display: inline-block; background: none; color: var(--muted);
+  border: 1px dashed var(--border); padding: calc(0.15rem - 1px) calc(0.5rem - 1px);
+}
+.tag.growth { background: var(--tag-green); color: var(--tag-green-text); }
+.tag.stabilising { background: var(--tag-blue); color: var(--tag-blue-text); }
+.tag.festival { background: var(--tag-yellow); color: var(--tag-yellow-text); }
+.tag.warning { background: var(--tag-red); color: var(--tag-red-text); }
+.tag.ok { background: var(--tag-green); color: var(--tag-green-text); }
+
+/* ---- Cards ---- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.3rem; margin-bottom: 1rem; }
+.card p { margin: 0.4rem 0; }
+.source { font-size: 0.78rem; color: var(--muted); margin-top: 1.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.check { color: #7ecb7e; margin-right: 0.3rem; }
+.cross { color: #f5857e; margin-right: 0.3rem; }
+
+/* ---- Editing: drag handles & controls ---- */
+.drag-handle { visibility: hidden; cursor: grab; color: var(--muted); margin-right: 0.4rem; user-select: none; font-size: 0.85em; }
+.drag-handle:active { cursor: grabbing; }
+.editing .drag-handle { visibility: visible; }
+.editing section li > .tag { cursor: pointer; }
+li.dragging { opacity: 0.25; }
+li.drop-before { border-top: 2px solid var(--accent); }
+li.drop-after { border-bottom: 2px solid var(--accent); }
+ul.drop-child { outline: 1px dashed var(--accent); border-radius: 4px; min-height: 1.5rem; }
+.editing section > ul:empty { min-height: 1.5rem; }
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  opacity: 0.92;
+  max-width: 480px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+  transform: rotate(1.5deg);
+  transition: transform 0.1s;
+  list-style: none;
+}
+.drag-ghost .li-controls, .drag-ghost .drag-handle { display: none; }
+
+/* ---- Filter bar ---- */
+.filter-bar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; }
+.filter-bar span { font-size: 0.82rem; color: var(--muted); margin-right: 0.3rem; }
+.filter-btn { display: inline-block; font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600; cursor: pointer; border: none; }
+.filter-btn[data-filter="all"] { background: var(--border); color: var(--muted); }
+.filter-btn[data-filter="all"].active { background: var(--accent); color: #fff; }
+/* version filter buttons (.filter-btn.planv) get their hue inline + white text
+   above; ladder buttons (.filter-btn.stage-*) take the fixed palette above */
+.filter-btn[data-filter="unset"] { background: var(--border); color: var(--muted); }
+.filter-btn { transition: transform 0.1s, filter 0.1s; }
+.filter-btn:hover { filter: brightness(1.2); }
+.filter-btn:active { transform: scale(0.94); filter: brightness(0.9); }
+.filter-btn.active { outline: 2px solid currentColor; outline-offset: 1px; }
+
+/* ---- Roadmap legend ---- */
+/* Decodes the compact version tags (e.g. "p0.3") via the roadmap stage titles;
+   built by the plan renderer from plans/plan-versions.json. Chips reuse the tag
+   colour series so legend and tags match. Sticky one-column panel (one version
+   per row) fixed to the LEFT so it sits near the tags themselves while
+   reading/editing; on narrow viewports it falls back inline above the content
+   so it never covers anything. */
+/* Width tracks the left gutter beside the 800px centered content column:
+   half the leftover viewport, minus the 1rem left offset and a 1rem gap, so
+   the legend fills the available space at any width without overlapping —
+   capped at 18rem so it doesn't over-stretch on ultrawide screens. */
+.plan-legend {
+  position: fixed;
+  top: 4.5rem;
+  right: 1rem;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: min(18rem, calc((100vw - 800px) / 2 - 2rem));
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+}
+.plan-legend-label { color: var(--muted); font-weight: 600; margin-bottom: 0.15rem; }
+/* The label is a link to /site-roadmap (the legend's source page) — keep the
+   muted legend look over the global anchor blue; underline only on hover. */
+a.plan-legend-label { text-decoration: none; }
+a.plan-legend-label:hover { color: var(--text); text-decoration: underline; }
+.plan-legend-item { display: flex; align-items: center; gap: 0.45rem; }
+.plan-legend-item .tag { cursor: default; flex-shrink: 0; }
+.plan-legend-title { color: var(--muted); }
+/* Details on demand (plan-chrome buildLegend, 2026-09-15): the 'more' toggle
+   sits under the heading; open, each row wraps and grows a description
+   line. Beside it since 2026-09-16, an 'N earlier' toggle unfolds the past
+   stages as ordinary rows above the live ones — hidden by default. Past
+   chips are muted rather than coloured — they decode no tag. */
+.plan-legend-toggles { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: -0.15rem 0 0.15rem; }
+.plan-legend-toggle {
+  padding: 0 0.4rem;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.plan-legend-toggle:hover { color: var(--text); border-color: var(--text); }
+/* Open, a row is a two-column grid (chip | title) so a long title wraps
+   BESIDE its chip rather than under it, and the description spans both.
+   The fixed box also caps at the viewport and scrolls, since ~11 rows of
+   prose overrun a 1000px-tall window. */
+.plan-legend-open .plan-legend-item { display: grid; grid-template-columns: auto 1fr; column-gap: 0.45rem; align-items: center; }
+.plan-legend-open { max-height: calc(100vh - 6rem); overflow-y: auto; }
+.plan-legend-desc {
+  grid-column: 1 / -1;
+  margin: 0.05rem 0 0.25rem;
+  padding-left: 0.2rem;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--muted);
+  opacity: 0.85;
+}
+.plan-legend-past-chip { opacity: 0.45; filter: saturate(0.4); }
+@media (max-width: 1200px) {
+  .plan-legend { position: static; max-width: none; margin-bottom: 1.2rem; box-shadow: none; }
+  .plan-legend-open { max-height: none; overflow: visible; }
+}
+
+/* ---- Long-form bodies (li-detail) ---- */
+/* An entry's detail opens from the entry LINE, not from a marker (user decision
+   2026-08-25; plan-renderer.js toggleDetail). The <summary> still has to EXIST
+   — a <details> without one gets the UA's own 'Details' marker — so it is
+   hidden here rather than omitted there. Outside edit mode a click on the line
+   opens the body; inside it, a click places the caret instead. The opened prose
+   takes the text cursor back, since it is there to be read and selected. Which
+   rows HAVE a body is said by the indicator below, not by the cursor. */
+.li-detail > summary { display: none; }
+/* EVERY entry is clickable now, not just the ones that open: a click selects,
+   and selection is the point (user decision 2026-08-25). */
+.container:not(.editing) section li { cursor: pointer; }
+.li-detail { cursor: text; }
+
+/* A row carrying a body SAYS SO (user decision 2026-08-13). The pointer cursor
+   was once that hint, and it stopped discriminating the moment EVERY row became
+   clickable for selection (the rule above) — leaving rows with and without a
+   body identical at rest.
+   An INDICATOR, not the marker that was dropped: pointer-events:none, so the
+   entry LINE remains the one control. It rides inside .li-text (order 2,
+   flex:1), so it cannot disturb the num / tag / drag-handle slots or the line
+   spacing the hover rule is built around, and it flips when the body is open.
+   SSOT for the planning hub: this file is loaded by EVERY plan surface (all 24
+   app plan pages plus the site map), so the affordance is stated once here and
+   never per page. */
+.has-detail > .li-text::after {
+  content: "⌄";
+  margin-left: 0.35em;
+  color: var(--muted);
+  font-size: 0.85em;
+  pointer-events: none;
+}
+.has-detail:has(.li-detail[open]) > .li-text::after { content: "⌃"; }
+
+/* ---- Item controls ---- */
+.li-controls { display: none; gap: 0.2rem; margin-left: 0.4rem; vertical-align: middle; }
+.editing .li-controls { display: inline-flex; }
+.li-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  padding: 0.05rem 0.3rem;
+  line-height: 1.4;
+  user-select: none;
+  transition: transform 0.1s, color 0.1s, border-color 0.1s;
+}
+.li-btn:active { transform: scale(0.88); }
+.li-btn:hover { color: var(--text); border-color: var(--muted); }
+.li-btn.del:hover { color: var(--tag-red-text); border-color: var(--tag-red-text); }
+.add-item-row { visibility: hidden; margin-top: 0.5rem; padding-left: calc(3.4rem + 0.5rem + 1rem); }
+.editing .add-item-row { visibility: visible; }
+.add-item-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 0; transition: transform 0.1s, color 0.1s; }
+.add-item-btn:hover { color: var(--accent); }
+.add-item-btn:active { transform: scale(0.94); }
+.section-del-btn {
+  visibility: hidden;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+.editing .section-del-btn { visibility: visible; }
+
+/* ---- Toolbar ---- */
+#toolbar { position: fixed; bottom: 1.5rem; right: 1.5rem; display: flex; gap: 0.5rem; z-index: 100; }
+#toolbar button { transition: transform 0.1s, filter 0.1s, border-color 0.15s, color 0.15s; }
+#toolbar button:hover { filter: brightness(1.2); }
+#toolbar button:active { transform: scale(0.94); filter: brightness(0.9); }
+#edit-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+#edit-btn.active { border-color: var(--accent); color: var(--accent); }
+#save-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: none;
+}
+#reset-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* ---- Collapsible sections ---- */
+.section-collapse { margin-top: 0.5rem; }
+.section-collapse > summary { cursor: pointer; list-style: none; font-size: 0.8rem; color: var(--muted); padding: 0.2rem 0; user-select: none; }
+.section-collapse > summary::-webkit-details-marker { display: none; }
+.section-collapse > summary::before { content: "\25B8 Show tasks"; }
+.section-collapse[open] > summary::before { content: "\25BE Hide tasks"; }
+.section-collapse > summary:hover { color: var(--accent); }
+
+/* ---- Groups (app-list style) ---- */
+.group { margin-bottom: 2rem; counter-increment: g; counter-reset: s; }
+.group > h2.section-title::before { content: counter(g) ". "; }

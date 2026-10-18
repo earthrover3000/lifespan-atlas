@@ -1,0 +1,583 @@
+/* Stats-page skin, shared by the website's /site-stats (网站统计) and the
+   Personal Apps app-stats page (应用统计). Layered on top of base.css +
+   docs.css; pairs with page-widgets/stats-table.js (sorting + live time
+   refresh). Markup vocabulary it styles: .stats-table (+ .section-bar /
+   .others / .agg / .group-divider / .totals rows, .num cells, th .th-label /
+   .th-qual), .view-toggle radios, .group-toggle, .section-heading,
+   .touched-date/-block/-ago triplets, .line-history-svg, .ledger-table,
+   .series-row / .chart-scope (one project's history), .site-log-rings. */
+
+/* ---- Stats-page theme tokens ----
+   base.css's rule, followed here: each colour declared EXACTLY ONCE via
+   light-dark(light, dark), resolved by `color-scheme`, so the manual theme
+   toggle reaches them. docs.css keeps its own block for the status pills;
+   this one is for colours only the stats/roadmap surfaces use. Before
+   2026-09-06 these were hexes written inline in the rules below — the words
+   accent three times over — which is how the roadmap's Today wash came to be
+   tuned for the light theme alone. */
+:root {
+  /* The past→future boundary on the roadmap timeline, keyed to the
+     event-manifold / life-clock "now" marker (ANCHOR_MARKER_COLOR #E53935).
+     SAME red both ways; the STRENGTH differs because the ground does. A 14%
+     wash lightens to an obvious pink on #f5f5f5 but barely lifts #0f0f0f —
+     measured, −21.0 luminance in light against only +11.0 in dark, half the
+     presence. 28% restores it (+22.1) and keeps the row quieter than the
+     version bar above it (+31.0), which is the hierarchy light already had. */
+  --roadmap-today-wash: light-dark(
+      color-mix(in srgb, #E53935 14%, transparent),
+      color-mix(in srgb, #E53935 28%, transparent));
+  /* The line-history chart's WORDS series (lines ride var(--accent)). One
+     value for both themes — a warm tan that holds up on either ground. */
+  --chart-words: #d4a574;
+}
+
+/* nowrap keeps the Size cell's "12.4 KiB" (number + space + unit) on one
+   line — without it the space between value and unit becomes a wrap point
+   when the column is narrow, breaking the entry across two lines. The
+   other numeric columns have no internal spaces so this is a no-op there. */
+.stats-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Keep the Project name column (the first cell of every row) on one line
+   too, so multi-word names like "Itinerary Calendar" or "Site Facade" don't
+   wrap. The column absorbs the width and the date columns give it up. */
+.stats-table td:first-child { white-space: nowrap; }
+/* Entries sit indented under their section-bar header — shared by the stats
+   project-outline and the site roadmap. When a table is flattened (group
+   toggle off) there are no headers, so drop the indent back to the base cell
+   padding (0.8rem, from docs.css). The roadmap has no #group-categories
+   toggle, so it always stays indented. */
+.stats-table tbody tr:not(.section-bar) td:first-child { padding-left: 1.75rem; }
+body:has(#group-categories:not(:checked)) .stats-table tbody tr:not(.section-bar) td:first-child { padding-left: 0.8rem; }
+.stats-table tbody tr:hover { background: var(--surface); }
+.stats-table tfoot .totals td {
+  font-weight: 600;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+  padding-top: 0.7rem;
+}
+/* Sortable column headers — JS attaches click handlers and toggles
+   .sort-asc / .sort-desc to draw the active indicator. Each header
+   has a neutral ↕ glyph at rest; active sort swaps it for ↑ or ↓ in
+   the accent colour. Same character width on every state, so
+   column widths don't shift when sort criteria change. */
+.stats-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.stats-table th[data-sort]:hover { color: var(--text); }
+/* Sort glyph hangs off .th-label, not th, so it sits on the first line
+   beside the label; the .th-qual parenthetical sits on its own line below
+   and never inherits the arrow. The label + its trailing arrow are kept on
+   one line (nowrap) so the glyph's width is always reserved and never
+   forces "Words"/"Characters"/"Last touched" to break mid-label. */
+/* Top-align every header cell so all the bold .th-label titles sit on the
+   first line and align across the row — without this, headers that have no
+   .th-qual parenthetical (Project, Size, Created, …) get vertically
+   centred and float halfway down, out of line with the two-line headers
+   (Lines / Words / Characters). Top-align pins every title to line 1 and
+   drops every "(code)"/"(English)"/"(Chinese)" bracket to line 2. */
+.stats-table th { vertical-align: top; }
+.stats-table th .th-label { white-space: nowrap; }
+.stats-table th[data-sort] .th-label::after { content: ' ↕'; opacity: 0.3; }
+.stats-table th[data-sort].sort-asc .th-label::after { content: ' ↑'; color: var(--accent); opacity: 1; }
+.stats-table th[data-sort].sort-desc .th-label::after { content: ' ↓'; color: var(--accent); opacity: 1; }
+/* Column-meaning qualifier — "(code)" / "(English)" / "(Chinese)" — on its
+   own line, lighter and smaller than the label it annotates. */
+.stats-table th .th-qual { display: block; font-weight: normal; font-size: 0.82em; color: var(--muted); text-align: left; }
+
+/* Category grouping toggle. When unchecked, the project outline flattens:
+   its grey section bars hide and every entry sorts together (see the sort
+   JS). Default is checked (grouped). */
+.group-toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 0.8rem;
+}
+.group-toggle label { cursor: pointer; }
+body:has(#group-categories:not(:checked)) :is(#project-outline, #app-outline) .section-bar { display: none; }
+/* Aggregate row for projects hidden at this tier — sits last in tbody,
+   not part of the sort, visually softened so it reads as "rest". */
+.stats-table tbody .others td { color: var(--muted); font-style: italic; }
+.stats-table tbody .others:hover { background: transparent; }
+/* Divider row separating the table's groups: content projects from the
+   infrastructure block (site_facade, test-page), and that block from the
+   Total row. Pure visual seam, no data of its own. A tight tram-line —
+   two hairlines ~0.35rem apart that read as one deliberate band. The top
+   line is shared (border-collapse) with the row above; for the divider in
+   <tfoot> the bottom line is shared with the Total row's border-top.
+   Un-scoped from tbody so it works in both tbody and tfoot. */
+.stats-table .group-divider td {
+  padding: 0;
+  height: 0.35rem;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.stats-table .group-divider:hover { background: transparent; }
+/* Section label bars (Apps / Pages / Infrastructure / Libraries). The
+   label sits ON the grey band so it contrasts with the white entry rows,
+   and the bar doubles as the divider between sections. Clicking a bar
+   folds/unfolds its section (see stats-table.js); the chevron telegraphs
+   the state. */
+.stats-table .section-bar td {
+  background: var(--border);
+  color: var(--text);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+}
+.stats-table .section-bar:hover td { background: var(--border); }
+/* The fold chevron belongs to the CAPTION cell only. Scoped to :first-child
+   since 2026-08-23, when section bars grew Lines/Files/Size cells carrying
+   the section's own sum (stats_page._section_bar) — unscoped, every one of
+   those numbers wore its own ▾. The pre-existing `.roadmap-bar
+   td:nth-child(2)::before { content: none }` below was the same fix done
+   one-off for the one bar that already had a second cell. */
+.stats-table .section-bar td:first-child::before { content: '▾ '; opacity: 0.55; }
+.stats-table .section-bar.collapsed td:first-child::before { content: '▸ '; }
+/* The sum cells read as data, not as caption: same grey-bar background and
+   weight as the label, but no letter-spacing/uppercase (they are numbers)
+   and tabular figures so the columns line up with the rows beneath. */
+.stats-table .section-bar td.num {
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+/* Rows hidden by a folded section (class managed by stats-table.js; folds
+   suspend while the table is flattened via the group toggle). */
+.stats-table tr.fold-hidden { display: none; }
+/* Expand-all / collapse-all button — injected by stats-table.js into the
+   .group-toggle row (or its own row above the table when no group toggle
+   exists). Styled like the view-toggle pills; margin-left:auto pushes it to
+   the row's right edge (the containers are flex). */
+.fold-all {
+  margin-left: auto;
+  cursor: pointer;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.fold-all:hover { color: var(--text); }
+
+/* View toggle: pure-CSS swap between "date" and "block" columns.
+   Both spans render server-side; the radio state hides one or the other
+   via a body-level :has() rule. No JS required, crawler-visible. */
+.view-toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.5rem 0 0.8rem;
+}
+.view-toggle input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.view-toggle label {
+  cursor: pointer;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.view-toggle label:hover { color: var(--text); }
+.view-toggle input[type="radio"]:focus-visible + label {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.view-toggle input[type="radio"]:checked + label {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Chart controls row: the Chart/Table view, Linear/Logarithmic scale,
+   Lines/Words series, x-axis unit and Snapshots/Days resolution toggles,
+   sitting on one line directly above the chart (which supplies its own top
+   margin). Wraps on narrow viewports. */
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.2rem;
+  margin: 0.5rem 0 0;
+}
+.chart-controls .view-toggle { margin: 0; }
+/* Tighter pills, so all thirteen fit one line at 800px. */
+.chart-controls { gap: 0.4rem 0.8rem; }
+.chart-controls .view-toggle,
+.chart-controls .series-toggle { gap: 0.25rem; }
+.chart-controls .view-toggle label,
+.chart-controls .series-toggle label { padding: 0.2rem 0.45rem; }
+/* Series checkboxes reuse the view-toggle pill look; each lights up in its
+   own series colour when checked (Lines = accent, Words = the warm word hue),
+   mirroring the chart legend. */
+.series-toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+.series-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.series-toggle label {
+  cursor: pointer;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.series-toggle label:hover { color: var(--text); }
+.series-toggle input[type="checkbox"]:focus-visible + label {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* By id PREFIX: the engine suffixes each chart's control ids so two charts on
+   a page keep separate controls (source_stats/chart.py). */
+.series-toggle input[id^="series-lines"]:checked + label {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.series-toggle input[id^="series-words"]:checked + label {
+  color: var(--chart-words);
+  border-color: var(--chart-words);
+}
+.series-toggle input[type="checkbox"]:disabled + label {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* A disabled radio (the scale pair while the Table view shows — there is
+   nothing to scale) fades like a disabled series checkbox does. */
+.view-toggle input[type="radio"]:disabled + label {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Year arrows + project picker: the row above the chart's pills ──────── */
+.chart-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 1.2rem;
+  margin: 0.5rem 0 0;
+}
+.year-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+.year-step {
+  cursor: pointer;
+  min-width: 1.8rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  transition: border-color 0.15s, color 0.15s;
+}
+.year-step:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.year-step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.year-step:disabled { opacity: 0.4; cursor: not-allowed; }
+.year-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 9.5rem;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.year-name { color: var(--text); font-weight: 600; }
+.year-span { color: var(--muted); font-size: 0.7rem; }
+
+/* ── One project at a time ─────────────────────────────────────────────────
+   A table row whose project the chart has a series for is a click target
+   (stats-table.js adds .series-row; the server only supplies data-series).
+   The row being charted keeps the hover ground and wears the accent on its
+   name — the same colour its curve is drawn in. */
+.stats-table tr.series-row { cursor: pointer; }
+.stats-table tr.series-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stats-table tbody tr.series-selected { background: var(--surface); }
+.stats-table tbody tr.series-selected td:first-child {
+  color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* The same choice from the chart's control bar, pushed to the row's right
+   edge like .fold-all above the table. Wears the pill look, and lights up
+   like a checked pill while it names a project rather than all of them. */
+.chart-scope {
+  margin-left: auto;
+  max-width: 100%;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  transition: border-color 0.15s, color 0.15s;
+}
+.chart-scope:hover { color: var(--text); }
+.chart-scope:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chart-scope.scoped { color: var(--accent); border-color: var(--accent); }
+
+/* ── Ledger table (the chart's Table view) ────────────────────────────────
+   Built at runtime by stats-table.js from the chart's own data-chart-points
+   and swapped in for .chart-hover-wrap when the Chart/Table radio says so.
+   One row per x-axis period, newest first. Wears the .stats-table skin; the
+   rules here are only what differs from the project outline above. */
+.ledger-table { margin-top: 0.5rem; }
+/* No section bars, so no indent under them: back to the base cell padding.
+   (The body:has(#group-categories) rule above lands on the same value.) */
+.stats-table.ledger-table tbody tr:not(.section-bar) td:first-child { padding-left: 0.8rem; }
+/* Each series' headers wear its colour, as the chart legend and the series
+   checkboxes do, so a column reads as "that curve, at each close". */
+.ledger-table th.col-lines .th-label { color: var(--accent); }
+.ledger-table th.col-words .th-label { color: var(--chart-words); }
+/* The period still running has no close yet; its row says "so far" where the
+   others carry their last day, and its figures are provisional. */
+.ledger-table .ledger-sofar { color: var(--muted); font-style: italic; }
+.ledger-table td.delta { color: var(--muted); }
+
+/* Lock all three spans to the same minimum width so column sizing
+   stays stable when the toggle swaps which one is visible. The widest
+   possible content across views is the date "2026-05-04" (10 chars);
+   6em fits all three formats at the table's font size. */
+/* Section headings above each table ("Project history", "Site history").
+   The first heading sits closer to the view-toggle (which it follows
+   directly) — `:first-of-type` tightens its top margin. The second
+   heading gets a bigger gap above so the two tables read as separate
+   sections rather than one block. */
+.section-heading {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 2.5rem 0 0.5rem;
+}
+.section-heading:first-of-type { margin-top: 1rem; }
+/* A chart section rendered collapsed (chart.render_section collapsed=True):
+   the heading IS the <summary>, wearing the section bars' chevron instead of
+   the browser's disclosure triangle. */
+details.chart-section > summary { list-style: none; cursor: pointer; }
+/* Inside the <summary> the h2 is its parent's first h2, so the rule above
+   would pull it up to the page-top spacing; restore the between-sections gap. */
+details.chart-section > summary .section-heading { margin-top: 2.5rem; }
+details.chart-section > summary::-webkit-details-marker { display: none; }
+details.chart-section > summary .section-heading::before { content: '▸ '; opacity: 0.55; }
+details.chart-section[open] > summary .section-heading::before { content: '▾ '; }
+.site-milestones { margin-top: 0; }
+/* Line-history chart sits beneath the heading like a table would —
+   same top spacing, full width, modest max-height to keep proportions
+   readable on narrow viewports. */
+.line-history-svg {
+  margin-top: 0.5rem;
+  max-height: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+/* ── Chart hover crosshair ──────────────────────────────────────────────────
+   Progressive enhancement assembled at runtime by stats-table.js: it wraps
+   .line-history-svg in .chart-hover-wrap, appends the .chart-readout beneath
+   it and a .crosshair-layer inside the SVG. None of this markup is
+   server-rendered, so with JS off the chart is untouched. */
+/* The layer must never eat its own pointer events — the guide sits under the
+   cursor by construction, and a hit there would fight the pointermove. */
+.crosshair-layer { pointer-events: none; }
+/* Today — the you-are-here guide at now, behind the series. The hover
+   guide's dash rhythm, so the two read as one family of time markers, and
+   the atlas's anchor red (base.css --anchor-red) so it is never mistaken
+   for the grey hover guide or the faint solid boundary lines. Visible
+   because the x-axis runs past now to the end of the current blocks; this
+   is where the data stops and the projection starts. */
+.today-layer .today-line {
+  stroke: var(--anchor-red);
+  stroke-opacity: 0.7;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.crosshair-layer .ch-line {
+  stroke: currentColor;
+  stroke-opacity: 0.35;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+/* Markers carry a surface-coloured rim so they stay legible where the two
+   series cross each other or a gridline. */
+.crosshair-layer .ch-dot { stroke: var(--surface); stroke-width: 1.5; }
+.crosshair-layer .ch-dot-lines { fill: var(--accent, #7c9ef5); }
+.crosshair-layer .ch-dot-words { fill: var(--chart-words); }
+/* Hover readout — UNDER the chart, never over it. Always populated: it
+   reports the hovered snapshot while the pointer is on the plot and the most
+   recent build the rest of the time, so it never blinks out. min-height holds
+   the row steady across the one/two-field states. Left padding matches the
+   SVG's own inner padding so the text lines up with the plot. */
+.chart-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 1.1rem;
+  min-height: 1.5em;
+  /* Own line-height pinned to the min-height reservation: the page body's
+     inherited line-height is taller (docs pages: 1.7), so a readout that
+     starts EMPTY (the site-log rings) would grow by the difference on first
+     hover and wobble the page. With the two equal, empty and populated
+     render at the same height everywhere. */
+  line-height: 1.5;
+  margin-top: 0.4rem;
+  padding: 0 16px;
+  font-size: 0.75rem;
+}
+.chart-readout .ch-when { color: var(--muted); }
+.chart-readout .ch-field { display: inline-flex; align-items: baseline; gap: 0.4rem; }
+.chart-readout .ch-when, .chart-readout .ch-val { font-variant-numeric: tabular-nums; }
+.chart-readout .ch-f-lines .ch-key { color: var(--accent); }
+.chart-readout .ch-f-words .ch-key { color: var(--chart-words); }
+/* Two-row variant (the line-history chart): line 1 is the snapshot's counts,
+   line 2 the change over the 24 hours before it. A grid rather than the flex
+   default because flex cannot column-align across rows — and the alignment is
+   the whole point: each delta sits in the same column as the count it modifies,
+   so line 2 carries no labels of its own. .ch-field collapses to `contents` so
+   its key and value become grid items in their own right; the widget sets
+   grid-template-columns to match the visible series (see renderReadout).
+   justify-content keeps the auto tracks at content width instead of stretching
+   them across the box. The single-line consumers (site-log-rings) never take
+   this class and keep the flex layout above. */
+.chart-readout.ch-grid {
+  display: grid;
+  justify-content: start;
+  column-gap: 0.45rem;
+  row-gap: 0.15rem;
+}
+.chart-readout.ch-grid .ch-field { display: contents; }
+/* Key padding + column-gap reproduce the 1.1rem the flex layout put between
+   whole fields, while the gap alone keeps each key close to its own value. */
+.chart-readout.ch-grid .ch-key { padding-left: 0.65rem; }
+/* Right-aligned against the tabular-nums figures: 114,387 and +412 are
+   different widths, and it is their last digits that should share an edge. */
+.chart-readout.ch-grid .ch-val { justify-self: end; }
+
+.touched-date, .touched-block, .touched-ago { min-width: 6em; }
+.touched-date { display: inline-block; }
+.touched-block, .touched-ago { display: none; }
+body:has(#view-block:checked) .touched-date { display: none; }
+body:has(#view-block:checked) .touched-block { display: inline-block; }
+body:has(#view-ago:checked) .touched-date { display: none; }
+body:has(#view-ago:checked) .touched-ago { display: inline-block; }
+
+/* ── Roadmap / What's New surfaces ──────────────────────────────────────────
+   Shared by /site-roadmap and /whats-new (site_roadmap package). Both render
+   the milestone timeline as a .stats-table; the What's New face reuses the same
+   rows, so these rules serve both. */
+/* Stage/version bars: collapsible like stats, labels selectable to copy.
+   Defining events never fold (nofold) so a collapsed section still shows its
+   headline + date; only non-defining events fold. */
+.roadmap-bar td { user-select: text; }
+/* Fixed-width stage label so the `✦` + title align across every bar
+   (Phase/Version differ in length). Generous so the longest never spills. */
+.roadmap-bar .rm-stage { display: inline-block; min-width: 7em; }
+/* Defining event's date on the bar — shown only when collapsed (the defining
+   row itself folds away then). Full cell size/weight to match the expanded
+   date + Today line; no collapse chevron on this date cell. */
+.roadmap-bar-date { display: none; }
+.section-bar.collapsed .roadmap-bar-date {
+  display: inline; font-size: 0.9rem; font-weight: 600;
+  text-transform: none; letter-spacing: normal;
+}
+.section-bar.roadmap-bar td:nth-child(2)::before { content: none; }
+/* Defining event — the milestone that moved the site into this version.
+   Lighter than the title bar's grey so the two don't merge, with an accent
+   left-edge + bold name, and a hover highlight. */
+.roadmap-defining td { background: color-mix(in srgb, var(--border) 55%, transparent); font-weight: 600; }
+.roadmap-defining td:first-child { border-left: 3px solid var(--accent); }
+.roadmap-defining:hover td { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+/* Today line — the past→future boundary (roadmap timeline only; the What's New
+   face is shipped-only and emits no Today row). Red wash, per-theme strength;
+   see --roadmap-today-wash at the top of this file for why the two differ. */
+.roadmap-today td { background: var(--roadmap-today-wash); font-weight: 600; }
+
+/* ---- Site Log rings (page-widgets/site-log-rings.js) ----
+   The widget BUILDS the wheel and this file DRESSES it. Until 2026-09-06 the
+   sizing and the label ink were set as inline `style` attributes from the
+   JS, which put presentation in two places and hid it from the theme audit
+   this block sits under. What stays inline there is only what JS computes —
+   per-element geometry, and the shading segments' fill, which is chosen at
+   run time between a phase hex and the muted grey.
+
+   Sized like the line-history chart: fluid width, capped height. currentColor
+   rides the page text colour so the event ticks (fill: currentColor) follow
+   the theme, and the phase hexes read at band opacity on either ground. */
+.site-log-rings-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 340px;
+  margin-top: 0.5rem;
+  color: var(--text);
+}
+/* The doorway into the Atlas, under the Site Log heading. base.css styles
+   .head-meta links as quiet inline text — colour inherited, underline only on
+   hover — which is right for the meta lines that sit under a page title but
+   left this one reading as prose rather than as somewhere to go. It carries
+   its own underline; the colour stays inherited so the line stays quiet.
+
+   Selector scoped to `.head-meta a.site-log-link` on purpose: base.css's rule
+   is `.head-meta a`, one class AND one element, so a bare `.site-log-link`
+   loses on specificity and the underline silently does not appear (it took a
+   computed-style read to notice — text-underline-offset applied while
+   text-decoration-line stayed `none`). */
+.head-meta a.site-log-link { text-decoration: underline; text-underline-offset: 0.15em; }
+
+/* Calendar ink — the month names, their boundary ticks and the year numbers.
+   The site's analog of the app's `t.labelMuted`, which is what the Rings
+   view draws its label tier in. */
+.site-log-rings-svg .slr-ink { fill: var(--muted); }
+
+/* Roadmap ⇄ What's New mode toggle. Same pure-CSS radiogroup idiom as the
+   date view-toggle: the checked #mode-* radio shows its view (and its heading)
+   and hides the other. Both views + both headings render server-side, so the
+   page is complete with no JS and fully crawler-visible; switching is instant.
+   The two output files (/site-roadmap, /whats-new) differ only in which radio
+   ships checked — the entry point picks the landing mode. */
+.mode-toggle { margin-top: 0; }
+.mode-only { display: none; }
+.mode-view { display: none; }
+body:has(#mode-roadmap:checked) .mode-only-roadmap,
+body:has(#mode-roadmap:checked) #mode-roadmap-view { display: block; }
+body:has(#mode-whatsnew:checked) .mode-only-whatsnew,
+body:has(#mode-whatsnew:checked) #mode-whatsnew-view { display: block; }
