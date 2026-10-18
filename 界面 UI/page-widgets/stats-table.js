@@ -1221,21 +1221,37 @@
         }
         return points.length - 1;
       }
+      // ── Pinning (user decision 2026-10-18) ──────────────────────────────
+      // A click PINS the crosshair at the moment under the pointer: the guide
+      // and the readout — every line's count at that point — stay there while
+      // the pointer moves on, and a click elsewhere moves the pin. A
+      // right-click lets go (and is left to the browser's own menu when
+      // nothing is pinned). Pinning never changes WHICH lines are drawn; a
+      // change of lines keeps the pin, and its readout follows them. Anything
+      // that rebuilds the time index (year, Snapshots/Days) lets go, through
+      // restCrosshair.
+      let pinned = false;
+      const setPinned = on => {
+        pinned = on;
+        chLayer.classList.toggle('pinned', on);
+      };
       function restCrosshair() {
         activeIdx = -1;
+        setPinned(false);
         chLayer.style.display = 'none';
         renderReadout(restIndex());
       }
 
-      svg.addEventListener('pointermove', evt => {
+      // The snapshot under a pointer event, or -1 for "pointing at nothing".
+      function indexAt(evt) {
         const ctm = svg.getScreenCTM();
-        if (!ctm) return;
+        if (!ctm) return -1;
         const q = svg.createSVGPoint();
         q.x = evt.clientX; q.y = evt.clientY;
         // Screen → viewBox units: the SVG is width:100% with a fixed viewBox,
         // so the CTM is the only reliable way to undo the responsive scaling.
         const v = q.matrixTransform(ctm.inverse());
-        if (v.x < padL - 8 || v.x > W - padR + 8) { restCrosshair(); return; }
+        if (v.x < padL - 8 || v.x > W - padR + 8) return -1;
         // Past now there is nothing to read — the series has no value yet
         // and the axis only runs on so it can close on a block boundary. The
         // cut is at NOW, not at the newest point: in Snapshots mode the last
@@ -1245,12 +1261,28 @@
         // "pointing at nothing": guide hidden, readout on the newest point.
         // The same 8-unit tolerance as the plot edges, so a point stamped
         // seconds ago is still reachable under the guide itself.
-        if (v.x > xForMs(+now) + 8) { restCrosshair(); return; }
-        const i = nearestIndex(v.x);
+        if (v.x > xForMs(+now) + 8) return -1;
+        return nearestIndex(v.x);
+      }
+
+      svg.addEventListener('pointermove', evt => {
+        if (pinned) return;
+        const i = indexAt(evt);
         if (i < 0) { restCrosshair(); return; }
         showAt(i);
       });
-      svg.addEventListener('pointerleave', restCrosshair);
+      svg.addEventListener('pointerleave', () => { if (!pinned) restCrosshair(); });
+      svg.addEventListener('click', evt => {
+        const i = indexAt(evt);
+        if (i < 0) return;
+        showAt(i);
+        setPinned(true);
+      });
+      svg.addEventListener('contextmenu', evt => {
+        if (!pinned) return;
+        evt.preventDefault();
+        restCrosshair();
+      });
       pinColumns();
       restCrosshair();
 
