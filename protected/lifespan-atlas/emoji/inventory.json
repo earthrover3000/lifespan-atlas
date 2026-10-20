@@ -6,12 +6,6 @@
   "asset": true
  },
  {
-  "glyph": "📏",
-  "cps": "1f4cf",
-  "count": 9,
-  "asset": true
- },
- {
   "glyph": "🔄",
   "cps": "1f504",
   "count": 9,
@@ -20,6 +14,12 @@
  {
   "glyph": "👤",
   "cps": "1f464",
+  "count": 8,
+  "asset": true
+ },
+ {
+  "glyph": "📏",
+  "cps": "1f4cf",
   "count": 8,
   "asset": true
  },
