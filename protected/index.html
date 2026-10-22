@@ -1476,7 +1476,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="lifespan-atlas/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">110,009 lines 📊</a> ✦ Last updated <time datetime="2026-10-22T19:07:11Z" title="2026-10-22 19:07 UTC" class="relative-time">2026-10-22</time></p>
+<p class="head-meta"><a href="stats/">110,035 lines 📊</a> ✦ Last updated <time datetime="2026-10-22T19:18:45Z" title="2026-10-22 19:18 UTC" class="relative-time">2026-10-22</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
@@ -1592,6 +1592,8 @@ function durationUnits(seconds) {
    it): index_page inlines it via read_relative_time_js().
    window.relativeTime.render(root)  re-render every <time> under root
    window.relativeTime.text(iso)     the same words as a string
+   window.relativeTime.units(sec)    a duration as {d,h,m,s} strings,
+                                     the cells `relative-time-units` fills
    THE WORDS ARE `agoText`, 引擎 Engines/time-ago/time-ago.js (user
    decision 2026-10-20: one spelling of "… ago" everywhere) — inlined
    IN FRONT of this file by read_relative_time_js, so this file is never
@@ -1648,7 +1650,10 @@ function durationUnits(seconds) {
       }
     });
   };
-  window.relativeTime = { text, render };
+  // A fixed duration in the same unit cells (the Sessions card's
+  // finished-turn length, 2026-10-22).
+  const units = (seconds) => durationUnits(Math.max(0, seconds));
+  window.relativeTime = { text, render, units };
   render(document);
 })();
 
