@@ -738,6 +738,12 @@
   "asset": true
  },
  {
+  "glyph": "📕",
+  "cps": "1f4d5",
+  "count": 1,
+  "asset": true
+ },
+ {
   "glyph": "📜",
   "cps": "1f4dc",
   "count": 1,
