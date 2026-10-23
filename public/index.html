@@ -5,7 +5,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Life Dial</title>
-<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MiIgeT0iNDkiIGZvbnQtc2l6ZT0iOTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIj7wn5WbPC90ZXh0Pjwvc3ZnPg==">
 <script>/* Site-wide theme control — the single source of truth for manual dark/light.
 
    Loaded as a BLOCKING <script> (no defer/async) early in every page's and
@@ -826,7 +825,7 @@ html:not([data-show-planned]) .cat-chip--planned-only { display: none; }
 }
 
 /* Developer entries — index cards and rows for scaffolding rather than
-   content (site-structure.yaml `dev: true`; Launchbolt is the only one so
+   content (site-structure.yaml `dev: true`; Orb is the only one so
    far). HIDDEN BY DEFAULT and revealed by Settings' "Show developer
    entries", the same shape as the planned rows below: the index head
    snippet stamps <html data-show-dev> from localStorage['site-show-dev']
@@ -1474,7 +1473,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="life-dial/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Index</span></nav>
 <h1>Life Dial</h1>
-<p class="head-meta"><a href="stats/">110,125 lines 📊</a> ✦ Last updated <time datetime="2026-10-22" class="relative-time relative-time-coarse">2026-10-22</time></p>
+<p class="head-meta"><a href="stats/">110,150 lines 📊</a> ✦ Last updated <time datetime="2026-10-23" class="relative-time relative-time-coarse">2026-10-23</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
@@ -1559,7 +1558,7 @@ function agoText(seconds) {
 // second always two digits: 45s · 3m45s · 2h05m · 1d03h (user decisions
 // 2026-10-22, for the 💬 Sessions widget). As parts, one per unit, so a
 // page can stand each unit in its own column and every m sits under every
-// m. The SAME RULE in Python is claude_sessions.fmt_age (📟 Readouts) —
+// m. The SAME RULE in Python is claude_sessions.fmt_age (Readouts) —
 // change both together.
 const pad2 = (n) => String(n).padStart(2, "0");
 
