@@ -78,18 +78,23 @@
       })();
     </script>
     <style>
+      /* BLOCK, NOT SWAP (2026-10-23). `swap` paints the fallback at once and
+         changes face when the file is decoded, so the wordmark flashed a
+         generic cursive on load even with the preload and the service-worker
+         cache. Both files are local and precached, so `block`'s invisible
+         window is milliseconds; only a slow first visit sees it at all. */
       @font-face {
         font-family: "Caveat";
         font-style: normal;
         font-weight: 600;
-        font-display: swap;
+        font-display: block;
         src: url("fonts/Caveat-SemiBold.woff2") format("woff2");
       }
       @font-face {
         font-family: "Fraunces";
         font-style: normal;
         font-weight: 400;
-        font-display: swap;
+        font-display: block;
         src: url("fonts/Fraunces-Regular.woff2") format("woff2");
       }
       /* THE SHELL MUST NOT ASSERT A BRAND. This background paints before any
@@ -100,7 +105,7 @@
          falls back to the graphite DEFAULT rather than a retired colour. */
       html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--la-brand, #33383D); }
     </style>
-    <script type="module" crossorigin src="./assets/index-CSltHgNr.js"></script>
+    <script type="module" crossorigin src="./assets/index-B4-TVZdw.js"></script>
   <link rel="manifest" href="./manifest.webmanifest"></head>
   <body>
     <div id="root"></div>
