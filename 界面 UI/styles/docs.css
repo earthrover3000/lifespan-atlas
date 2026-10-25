@@ -439,6 +439,53 @@ a.plan-legend-label:hover { color: var(--text); text-decoration: underline; }
 .li-btn.del:hover { color: var(--tag-red-text); border-color: var(--tag-red-text); }
 .add-item-row { visibility: hidden; margin-top: 0.5rem; padding-left: calc(3.4rem + 0.5rem + 1rem); }
 .editing .add-item-row { visibility: visible; }
+/* edit-mode.js (2026-10-24): an add button keeps its place in reading
+   mode, unseen, so switching to editing moves nothing — the plan pages'
+   .add-item-row rule, for any `.add-item`. */
+.container:not(.editing) .add-item { visibility: hidden; }
+/* AN ENCRYPTED VALUE IS MARKED 「LIKE THIS」 (user decisions 2026-10-25:
+   a mark on every value that is stored encrypted, so encrypted and plain
+   stand apart — first a grey ground, then corner brackets, chosen on a test
+   page). One rule for every page that loads docs.css: the Termination
+   Planner (where it is a feature of the app, lists.js), the Intentions page,
+   and the plan pages, which mark any decrypted value the same way.
+   NOTHING MOVES (user decision: "make sure UI text doesn't move"): the
+   value keeps a fixed slot each side — empty or written, editing or not —
+   and the brackets are drawn INSIDE it, as two corner lines rather than a
+   font's 「」, so their size and place never depend on the font. Brackets
+   that hung in no space were tried first and ran into a neighbouring value
+   (09:30「Gather). An empty field draws none. Accent colour, lighter than
+   the text: it marks, it does not hide. */
+.sealed-value { position: relative; padding: 0 0.42em; }
+.sealed-value:not(:empty)::before, .sealed-value:not(:empty)::after {
+  content: ""; position: absolute; width: 0.24em; height: 0.42em;
+  border: 0 solid var(--accent); opacity: 0.75; pointer-events: none; }
+.sealed-value:not(:empty)::before { left: 0.06em; top: 0.18em;
+  border-left-width: 1.5px; border-top-width: 1.5px; }
+.sealed-value:not(:empty)::after { right: 0.06em; bottom: 0.18em;
+  border-right-width: 1.5px; border-bottom-width: 1.5px; }
+/* A block value (a note, a description) is as wide as its text, so the
+   closing corner lands after the text, not at the far edge. */
+div.sealed-value { width: fit-content; max-width: 100%;
+  box-sizing: border-box; }
+/* The floating panel (edit-mode.js `openPopover`): over the page, never in
+   it, so opening it pushes nothing. */
+.edit-popover { position: absolute; z-index: 50; min-width: 16rem;
+  max-width: min(32rem, calc(100vw - 16px)); max-height: 60vh;
+  overflow: auto; padding: 0.6rem 0.8rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); font-size: 0.9rem; }
+.edit-popover .pop-field { display: flex; flex-direction: column;
+  gap: 0.15rem; margin: 0 0 0.5rem; }
+.edit-popover .pop-field:last-child { margin-bottom: 0; }
+.edit-popover .pop-label { font-size: 0.78rem; color: var(--muted); }
+.edit-popover input, .edit-popover textarea, .edit-popover select {
+  font: inherit; color: var(--text); background: var(--bg, transparent);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 0.2rem 0.4rem; }
+.edit-popover label.pick { display: block; padding: 0.1rem 0; }
+.edit-popover .picks-group { display: block; font-weight: 600;
+  margin-top: 0.3rem; }
 .add-item-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 0; transition: transform 0.1s, color 0.1s; }
 .add-item-btn:hover { color: var(--accent); }
 .add-item-btn:active { transform: scale(0.94); }
@@ -478,15 +525,18 @@ a.plan-legend-label:hover { color: var(--text); text-decoration: underline; }
    field keeps the font, size and place of the text it stands for; only a
    faint dashed outline says it can be typed in, solid accent while it is.
    An empty one shows its name, greyed. A many-line field is a block that
-   grows with its text. */
+   grows with its text — no margin or height of its own, so arming the
+   text it stands for moves nothing. */
 .inline-edit { outline: 1px dashed color-mix(in srgb, var(--muted) 55%,
   transparent); outline-offset: 2px; border-radius: 2px; cursor: text; }
-span.inline-edit { display: inline-block; min-width: 3ch; }
+/* Inline as the text it stands for, so arming it moves nothing (an
+   inline-block sat 2px higher in a stage heading); only an EMPTY field
+   becomes a block with room to click its placeholder. */
+span.inline-edit:empty { display: inline-block; min-width: 3ch; }
 .inline-edit:focus { outline: 1px solid var(--accent); }
 .inline-edit:empty::before { content: attr(data-placeholder);
   color: var(--muted); opacity: 0.7; }
-.inline-edit-multi { display: block; white-space: pre-wrap;
-  min-height: 1.4em; margin-top: 0.3rem; }
+.inline-edit-multi { display: block; white-space: pre-wrap; }
 #save-btn {
   padding: 0.5rem 1rem;
   border-radius: 6px;
@@ -496,15 +546,6 @@ span.inline-edit { display: inline-block; min-width: 3ch; }
   font-size: 0.85rem;
   cursor: pointer;
   display: none;
-}
-#reset-btn {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.85rem;
-  cursor: pointer;
 }
 
 /* ---- Collapsible sections ---- */

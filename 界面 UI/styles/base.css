@@ -206,6 +206,39 @@ body {
 }
 .head-controls > a.up-link:hover { text-decoration: underline; }
 
+/* THE CONTROLS ROW (user decisions 2026-10-24: "put [the edit button] as a
+   button in the first row below the status line … so the status line is
+   purely the status line", then "this should be SSOT of a plan page"): one
+   row of buttons right under a page's status line — a plan page's Edit and
+   Save to file, the Termination Planner's Edit, Add and lock.
+   Here, not in docs.css, because the planner's part pages load only this
+   sheet. The buttons share one size; each keeps its own colours (Save to
+   file stays the filled one). */
+/* ITS HEIGHT IS RESERVED (user decision 2026-10-25: "reserve space for
+   the controls line in advance so UI doesn't move"): the lock's buttons
+   are drawn by script, so the row used to open at 0px and grow to a
+   button's height a moment later, pushing the page down 36px. It is one
+   button tall from the start — the buttons' own height, from the same
+   numbers (font size × line height + padding + border). */
+.controls-row { --control-h: calc(0.9rem * 1.5 + 0.6rem + 2px);
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+  min-height: var(--control-h); margin: 0.3rem 0 0.9rem; }
+.controls-row [hidden] { display: none !important; }
+.controls-row > button, .controls-row .lock-controls > button,
+.controls-row #edit-btn, .controls-row #save-btn {
+  font: inherit; font-size: 0.9rem; line-height: 1.5;
+  padding: 0.3rem 0.9rem; box-sizing: border-box;
+  min-height: var(--control-h);
+  border-radius: 4px; cursor: pointer; margin: 0; }
+.controls-row > button.button, .controls-row .lock-controls > button,
+.controls-row #edit-btn {
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); }
+.controls-row #edit-btn.active { border-color: var(--accent);
+  color: var(--accent); }
+.controls-row .lock-controls { display: inline-flex; gap: 0.5rem; }
+.controls-row .lock-controls:empty { display: none; }
+
 /* ---- Head-region typography ---- */
 h1 {
   font-size: 1.6rem;
