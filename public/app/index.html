@@ -24,34 +24,10 @@
          self-hosted, is the descriptor line under it, and nothing else
          loads (theme/wordmark). -->
     <title>Life Dial</title>
-    <!-- ASK FOR AN UPDATE BEFORE THE APP BOOTS (2026-10-01). The bundle
-         registers the service worker only once it has run — some 700 ms in
-         — and until then nobody had asked whether a newer build exists, so
-         a stale launch painted the old app first and replaced it a second
-         or two later. Asking here means the new worker is already installing
-         when the app mounts. And it TELLS the app: `__laUpdateFound` plus a
-         `la-update-found` event, which lib/reloadVeil reads at module scope,
-         so the "Updating…" veil is up in the app's first render and the old
-         app is never drawn. Only when a worker already controls the page —
-         a first install is not an update. A first visit has no registration
-         and this does nothing. -->
-    <script>
-      try {
-        if (navigator.serviceWorker) {
-          navigator.serviceWorker.getRegistration().then(function (r) {
-            if (!r) return;
-            var found = function () {
-              if (!navigator.serviceWorker.controller) return;
-              window.__laUpdateFound = true;
-              window.dispatchEvent(new Event("la-update-found"));
-            };
-            r.addEventListener("updatefound", found);
-            if (r.installing || r.waiting) found();
-            r.update().catch(function () {});
-          });
-        }
-      } catch (e) {}
-    </script>
+    <!-- The update check that runs BEFORE the app, and the veil's label
+         across a reload, are the shell's since 2026-10-27: vite/shell.mjs
+         veilBootHtml writes both into this page (圆珠 Orb boots the same
+         way). -->
     <!-- PRE-PAINT BRAND. Runs before the stylesheet below is used to paint,
          so the very first frame is already the reader's colour and there is
          no flash of a default on the way to it.
@@ -105,18 +81,26 @@
          falls back to the graphite DEFAULT rather than a retired colour. */
       html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--la-brand, #33383D); }
     </style>
-    <script type="module" crossorigin src="./assets/index-C6i9Xz03.js"></script>
+    <script type="module" crossorigin src="./assets/index-C6lUG7zj.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-CQl4siy5.css">
+    <script>
+      try {
+        if (navigator.serviceWorker) {
+          navigator.serviceWorker.getRegistration().then(function (r) {
+            if (!r) return;
+            var found = function () {
+              if (!navigator.serviceWorker.controller) return;
+              window.__laUpdateFound = true;
+              window.dispatchEvent(new Event("la-update-found"));
+            };
+            r.addEventListener("updatefound", found);
+            if (r.installing || r.waiting) found();
+            r.update().catch(function () {});
+          });
+        }
+      } catch (e) {}</script>
   <link rel="manifest" href="./manifest.webmanifest"></head>
   <body>
-    <div id="root"></div>
-    <!-- THE VEIL'S LABEL, ACROSS A RELOAD (2026-10-01). A reload made under
-         a labelled veil (an update: "Updating…") leaves the label in
-         sessionStorage (lib/reloadVeil). This paints it on the boot teal at
-         once, so the words do not vanish for the half second the bundle
-         takes to run; the app's own curtain then draws the same words in
-         the same place, removes this stand-in, and fades out with them.
-         Styled exactly as components/Curtain styles its label. -->
     <div id="la-boot-label" role="status" style="position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;color:rgba(255,255,255,0.9);font-family:sans-serif;font-size:15px;font-weight:400;pointer-events:none"></div>
     <script>
       try {
@@ -126,7 +110,8 @@
           laLabel.textContent = laCarry;
           laLabel.style.display = "flex";
         }
-      } catch (e) {}
-    </script>
+      } catch (e) {}</script>
+
+    <div id="root"></div>
   </body>
 </html>
