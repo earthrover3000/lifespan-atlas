@@ -1020,6 +1020,12 @@
   "asset": true
  },
  {
+  "glyph": "⌚",
+  "cps": "231a",
+  "count": 1,
+  "asset": true
+ },
+ {
   "glyph": "⏩",
   "cps": "23e9",
   "count": 1,
