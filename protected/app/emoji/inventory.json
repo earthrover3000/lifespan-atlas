@@ -210,14 +210,8 @@
   "asset": true
  },
  {
-  "glyph": "📅",
-  "cps": "1f4c5",
-  "count": 3,
-  "asset": true
- },
- {
-  "glyph": "📱",
-  "cps": "1f4f1",
+  "glyph": "📲",
+  "cps": "1f4f2",
   "count": 3,
   "asset": true
  },
@@ -398,6 +392,12 @@
  {
   "glyph": "💿",
   "cps": "1f4bf",
+  "count": 2,
+  "asset": true
+ },
+ {
+  "glyph": "📅",
+  "cps": "1f4c5",
   "count": 2,
   "asset": true
  },
@@ -798,8 +798,8 @@
   "asset": true
  },
  {
-  "glyph": "📲",
-  "cps": "1f4f2",
+  "glyph": "📱",
+  "cps": "1f4f1",
   "count": 1,
   "asset": true
  },
@@ -830,6 +830,12 @@
  {
   "glyph": "🔆",
   "cps": "1f506",
+  "count": 1,
+  "asset": true
+ },
+ {
+  "glyph": "🔐",
+  "cps": "1f510",
   "count": 1,
   "asset": true
  },
