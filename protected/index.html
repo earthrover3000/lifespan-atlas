@@ -280,7 +280,7 @@ body {
    button in the first row below the status line … so the status line is
    purely the status line", then "this should be SSOT of a plan page"): one
    row of buttons right under a page's status line — a plan page's Edit and
-   Save to file, the Termination Planner's Edit, Add and lock.
+   Save to file, the Death Plan's Edit, Add and lock.
    Here, not in docs.css, because the planner's part pages load only this
    sheet. The buttons share one size; each keeps its own colours (Save to
    file stays the filled one). */
@@ -626,8 +626,9 @@ li { margin: var(--row-gap) 0; }
 }
 .row a:hover { background: var(--surface); text-decoration: underline; }
 /* A SUB-ROW sits under the row above it — a project inside that row's
-   folder (the Planning Room's PC Setup Companion and Digital Inventory under
-   System Environment, user decision 2026-10-19). Opt-in per entry (`sub`),
+   folder (the Planning Room's PC Setup Companion under System Environment,
+   user decision 2026-10-19; the Digital Inventory too until it became a
+   top-level folder, 2026-10-31). Opt-in per entry (`sub`),
    so every other page renders as before. */
 .row li.sub-row > a:not(.row-folder):not(.row-open) { padding-left: 2rem; }
 
@@ -1509,7 +1510,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="app/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">105,650 lines 📊</a> ✦ Last updated <time datetime="2026-10-31T03:50:09Z" title="2026-10-31 03:50 UTC" class="relative-time">2026-10-31</time></p>
+<p class="head-meta"><a href="stats/">105,658 lines 📊</a> ✦ Last updated <time datetime="2026-11-01T03:50:12Z" title="2026-11-01 03:50 UTC" class="relative-time">2026-11-01</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
@@ -1533,7 +1534,7 @@ a.app-card:hover {
 </div>
 <div class="side">
 <ul>
-  <li class="row-group">Links</li>
+  <li class="row-group">Interfaces</li>
   <li>
     <a class="app-card" href="/personal-website/contents/pages/protected/" target="_blank" rel="noopener">
       <img class="app-card__icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MiIgeT0iNDkiIGZvbnQtc2l6ZT0iOTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIj7wn5u4PC90ZXh0Pjwvc3ZnPgo=" alt="" />
