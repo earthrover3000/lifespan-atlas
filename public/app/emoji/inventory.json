@@ -588,6 +588,12 @@
   "asset": true
  },
  {
+  "glyph": "🌳",
+  "cps": "1f333",
+  "count": 1,
+  "asset": true
+ },
+ {
   "glyph": "🌷",
   "cps": "1f337",
   "count": 1,
