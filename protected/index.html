@@ -67,7 +67,7 @@
   });
 })();
 </script>
-<script>if(localStorage.getItem("site-show-dev")==="on")document.documentElement.setAttribute("data-show-dev","");</script>
+<script>if(localStorage.getItem('site-show-dev')==="on")document.documentElement.setAttribute("data-show-dev","");</script>
 <style>/* Shared base styles for index pages (root, protected, private) and docs
    pages (site-map, site-stats, lifespan-atlas plan). Loaded BEFORE the
    page-specific stylesheet so page rules can override.
@@ -1510,7 +1510,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="app/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">105,658 lines 📊</a> ✦ Last updated <time datetime="2026-11-02T03:50:08Z" title="2026-11-02 03:50 UTC" class="relative-time">2026-11-02</time></p>
+<p class="head-meta"><a href="stats/">105,658 lines 📊</a> ✦ Last updated <time datetime="2026-11-02T09:29:17Z" title="2026-11-02 09:29 UTC" class="relative-time">2026-11-02</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
@@ -1549,7 +1549,7 @@ a.app-card:hover {
 </div>
 </div>
 </div>
-<script>window.__indexTopicKinds=[];</script>
+<script>window.__indexTopicKinds=[];window.__indexScopedKinds=[];</script>
 <script>
 (() => {
 // time-ago — how long ago, in words: THE one spelling of it (user decision
@@ -1819,7 +1819,9 @@ function durationUnits(seconds) {
     const revealable = document.querySelector(
       '.' + kind + '-row, .app-card--' + kind + ', .' + kind + '-entry');
     if (!sw && !revealable) return;
-    const K = 'site-show-' + kind;
+    // A switch shown on this page keeps its own state (show_stamp_script).
+    const K = 'site-show-' + kind + ((window.__indexScopedKinds || [])
+      .includes(kind) ? ':'+location.pathname.replace(/index\.html$/,'') : '');
     const ATTR = 'data-show-' + kind;
     const stamp = () => {
       const on = localStorage.getItem(K) === 'on';

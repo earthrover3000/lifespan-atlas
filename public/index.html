@@ -67,7 +67,7 @@
   });
 })();
 </script>
-<script>if(localStorage.getItem("site-show-dev")==="on")document.documentElement.setAttribute("data-show-dev","");</script>
+<script>if(localStorage.getItem('site-show-dev')==="on")document.documentElement.setAttribute("data-show-dev","");</script>
 <style>/* Shared base styles for index pages (root, protected, private) and docs
    pages (site-map, site-stats, lifespan-atlas plan). Loaded BEFORE the
    page-specific stylesheet so page rules can override.
@@ -1546,7 +1546,7 @@ a.app-card:hover {
 </div>
 </div>
 </div>
-<script>window.__indexTopicKinds=[];</script>
+<script>window.__indexTopicKinds=[];window.__indexScopedKinds=[];</script>
 <script>
 (() => {
 // time-ago — how long ago, in words: THE one spelling of it (user decision
@@ -1816,7 +1816,9 @@ function durationUnits(seconds) {
     const revealable = document.querySelector(
       '.' + kind + '-row, .app-card--' + kind + ', .' + kind + '-entry');
     if (!sw && !revealable) return;
-    const K = 'site-show-' + kind;
+    // A switch shown on this page keeps its own state (show_stamp_script).
+    const K = 'site-show-' + kind + ((window.__indexScopedKinds || [])
+      .includes(kind) ? ':'+location.pathname.replace(/index\.html$/,'') : '');
     const ATTR = 'data-show-' + kind;
     const stamp = () => {
       const on = localStorage.getItem(K) === 'on';
