@@ -477,7 +477,9 @@ body:has(#group-categories:not(:checked)) :is(#project-outline, #app-outline) .s
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px 16px;
+  /* 8px a side (16 until 2026-11-05, user decision): the drawing's own
+     margins already keep the labels off the border. */
+  padding: 12px 8px;
 }
 /* NO FLASH (user decision 2026-10-19): the server draws the whole
    history, and stats-table.js then narrows it to the year. Until the
@@ -549,31 +551,85 @@ body:has(#group-categories:not(:checked)) :is(#project-outline, #app-outline) .s
 .chart-readout .ch-when { color: var(--muted); }
 .chart-readout .ch-field { display: inline-flex; align-items: baseline; gap: 0.4rem; }
 .chart-readout .ch-when, .chart-readout .ch-val { font-variant-numeric: tabular-nums; }
+/* Logarithmic's `e^` before each exponent, grey (user decision 2026-11-05). */
+.chart-readout .ch-e { color: var(--muted); }
 .chart-readout .ch-f-lines .ch-key { color: var(--accent); }
 .chart-readout .ch-f-words .ch-key { color: var(--chart-words); }
-/* Two-row variant (the line-history chart): line 1 is the snapshot's counts,
-   line 2 the change over the 24 hours before it. A grid rather than the flex
-   default because flex cannot column-align across rows — and the alignment is
-   the whole point: each delta sits in the same column as the count it modifies,
-   so line 2 carries no labels of its own. .ch-field collapses to `contents` so
-   its key and value become grid items in their own right; the widget sets
-   grid-template-columns to match the visible series (see renderReadout).
+/* Row-per-series variant (the line-history chart; user decision 2026-11-05):
+   a heading row — the snapshot's moment, and `24h` over the change column —
+   then one row per visible series: key, count, exponent (Logarithmic only),
+   change over the 24 hours before it. A grid rather than the flex default
+   because flex cannot column-align across rows, and the alignment is the
+   point: the counts share an edge, the changes share another. .ch-field
+   collapses to `contents` so its cells become grid items in their own right;
+   the widget sets grid-template-columns to match (see renderReadout).
    justify-content keeps the auto tracks at content width instead of stretching
    them across the box. The single-line consumers (site-log-rings) never take
    this class and keep the flex layout above. */
 .chart-readout.ch-grid {
   display: grid;
   justify-content: start;
-  column-gap: 0.45rem;
+  /* As tight as the Noticeboard widget's 0.4rem (user decision 2026-11-05):
+     the pinned widths already keep the figures apart. */
+  column-gap: 0.4rem;
   row-gap: 0.15rem;
 }
 .chart-readout.ch-grid .ch-field { display: contents; }
-/* Key padding + column-gap reproduce the 1.1rem the flex layout put between
-   whole fields, while the gap alone keeps each key close to its own value. */
-.chart-readout.ch-grid .ch-key { padding-left: 0.65rem; }
+/* The moment spans every column but the change's, whose heading is `24h`. */
+.chart-readout.ch-grid .ch-head { grid-column: 1 / -2; }
+.chart-readout.ch-grid .ch-since { justify-self: end; }
 /* Right-aligned against the tabular-nums figures: 114,387 and +412 are
    different widths, and it is their last digits that should share an edge. */
 .chart-readout.ch-grid .ch-val { justify-self: end; }
+/* A part's three-letter code as its key, its name on a line of its own
+   beneath — past the swatch, small, grey and tight under it, as the
+   Noticeboard's Workshop Stats widget sets them (user decision 2026-11-05).
+   It starts in the key's column so a long name (Digital Infrastructure)
+   stays inside the count columns' width. */
+.chart-readout .ch-code { font-weight: 600; }
+.chart-readout.ch-grid .ch-name {
+  grid-column: 1 / -2;
+  white-space: nowrap;
+  padding-left: 0.9rem;   /* the swatch and its margin */
+  margin-top: -0.2rem;
+  font-size: 0.85em;
+  line-height: 1.1;
+  color: var(--muted);
+}
+/* The rule above the totals line, across every column. */
+.chart-readout.ch-grid .ch-rule {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  margin: 0.1rem 0;
+}
+/* The share, under the change, right-aligned so the figures line up. */
+.chart-readout.ch-grid .ch-name-share {
+  grid-column: -2 / -1;
+  padding-left: 0;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+/* Beside the graph, INSIDE the content column (user decision 2026-11-05):
+   the graph narrows to leave the readout a column on its right, so graph
+   and readout together are as wide as the rest of the page; the graph is
+   drawn at its own width (stats-table.js fitWidth), not scaled, so its text
+   and height stay as they were.
+   The widget sets .ch-side while the column is at least 35rem wide — below
+   that (a phone) the readout goes back underneath. The readout's column is
+   as wide as its content, held at the widest it has been (a min-width the
+   widget raises), so the graph narrows once and never jumps back. The
+   readout's top lines up with the box's. */
+.chart-hover-wrap.ch-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  align-items: start;
+}
+.chart-hover-wrap.ch-side .chart-readout.ch-grid {
+  margin-top: 0.5rem;     /* .line-history-svg's own */
+  padding: 0;
+  justify-content: end;   /* flush with the column's right edge */
+}
 
 .touched-date, .touched-block, .touched-ago { min-width: 6em; }
 .touched-date { display: inline-block; }

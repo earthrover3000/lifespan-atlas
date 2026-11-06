@@ -452,7 +452,10 @@ whenSettled(function () {
     let rawPoints;
     try { rawPoints = JSON.parse(svg.dataset.chartPoints); } catch (e) { rawPoints = null; }
     if (rawPoints && rawPoints.length) {
-      const W = +svg.dataset.chartW, H = +svg.dataset.chartH;
+      // W is the drawing's width in viewBox units — `let`: fitWidth (below)
+      // redraws the chart at its box's own width.
+      let W = +svg.dataset.chartW;
+      const H = +svg.dataset.chartH;
       const padL = +svg.dataset.chartPadLeft, padR = +svg.dataset.chartPadRight;
       const padT = +svg.dataset.chartPadTop, padB = +svg.dataset.chartPadBottom;
       // The server sized these for the totals. `let`, like the log bounds
@@ -484,7 +487,8 @@ whenSettled(function () {
       const fmtNum = (v, places) => plain ? plainFormat.format(v)
         : formatter(places).format(v / unitScale);
       let yMaxWords = +svg.dataset.chartYMaxWords;
-      const chartW = W - padL - padR, chartH = H - padT - padB;
+      let chartW = W - padL - padR;
+      const chartH = H - padT - padB;
       const DAY_MS = 86400000;
 
       // ── Counts / Share (user decision 2026-10-24) ────────────────────────
@@ -705,9 +709,19 @@ whenSettled(function () {
         const p = Math.pow(10, Math.floor(Math.log10(raw)));
         return [1, 2, 5, 10].map(m => m * p).find(v => v >= raw - 1e-9) || 10 * p;
       };
-      const lnBounds = vals => {
+      // A page's fixed floor, in ln units (data-chart-log-floor, source_stats
+      // .chart render_svg `log_floor`; user decision 2026-11-05): the axis
+      // starts no lower, so a young part's first readings run off the bottom
+      // instead of squashing every other line. Ignored when nothing on
+      // screen reaches above it, so the chart never goes blank.
+      const logFloor = svg.dataset.chartLogFloor !== undefined
+        ? +svg.dataset.chartLogFloor : null;
+      const lnBounds = (vals, floor = null) => {
         if (!vals.length) return { lo: 0, hi: 2, step: 0.5 };
-        const lo = Math.floor(ln(Math.min(...vals)));
+        let lo = Math.floor(ln(Math.min(...vals)));
+        if (floor !== null && ln(Math.max(...vals)) > floor) {
+          lo = Math.max(lo, floor);
+        }
         const raw = Math.max(ln(Math.max(...vals)) - lo, 1e-6) / 4; // per-step to cover data
         const step = niceStep(raw);
         return { lo, hi: lo + step * 4, step };
@@ -781,7 +795,7 @@ whenSettled(function () {
         const lineKeys = overlayKeys.length ? overlayKeys : ['total'];
         totals = idx.flatMap(i => lineKeys.map(k => points[i][k])).filter(v => v != null);
         wordVals = idx.map(i => points[i].words).filter(v => v != null);
-        lnLines = lnBounds(totals);
+        lnLines = lnBounds(totals, logFloor);
         lnWords = wordVals.length
           ? lnBounds(wordVals) : { lo: 0, hi: 2, step: 0.5 };
         // An empty chart keeps the counts axis it had; a share axis is 100%.
@@ -842,6 +856,7 @@ whenSettled(function () {
       // either side of the window.
       // Zoom too: its fitted axis leaves older values above the plot or
       // below its floor, so the clip closes top and bottom as well.
+      let plotClip = null;          // its rect, which fitWidth resizes
       {
         const clipNS = 'http://www.w3.org/2000/svg';
         const clip = document.createElementNS(clipNS, 'clipPath');
@@ -850,6 +865,7 @@ whenSettled(function () {
         rect.setAttribute('x', padL); rect.setAttribute('y', padT - 2);
         rect.setAttribute('width', chartW);
         rect.setAttribute('height', chartH + 4);
+        plotClip = rect;
         clip.appendChild(rect);
         svg.appendChild(clip);
         [linesPath, wordsPath].forEach(
@@ -1385,11 +1401,77 @@ whenSettled(function () {
       svg.parentNode.insertBefore(wrap, svg);
       wrap.appendChild(svg);
       const readout = document.createElement('div');
-      // ch-grid: the two-row column-aligned variant of the readout (stats.css).
+      // ch-grid: the column-aligned, row-per-series readout (stats.css).
       // The other consumer of .chart-readout (site-log-rings) emits a single
       // line of prose and keeps the plain flex layout.
       readout.className = 'chart-readout ch-grid';
       wrap.appendChild(readout);
+      // BESIDE THE GRAPH, INSIDE THE COLUMN (user decision 2026-11-05): the
+      // graph narrows and the readout takes a fixed column on its right, so
+      // the pair is as wide as the rest of the page (stats.css .ch-side). The
+      // SVG scales with its box, so its text shrinks with it — accepted. On
+      // a column under 35rem (a phone) the readout goes back underneath. The
+      // test reads only the column's width, never the readout's content, so
+      // ticking a line cannot flip it. (In the margin beyond the column, on
+      // wide windows only, earlier the same day.)
+      const placeReadout = () => {
+        const w = wrap.getBoundingClientRect().width;
+        if (!w) return;                  // a hidden chart: keep the last place
+        const rem = parseFloat(
+          getComputedStyle(document.documentElement).fontSize);
+        wrap.classList.toggle('ch-side', w >= 35 * rem);
+      };
+      placeReadout();
+      window.addEventListener('resize', placeReadout);
+
+      // ── DRAWN AT ITS OWN WIDTH (user decision 2026-11-05) ───────────────
+      // The server draws at a nominal 800 wide; here the drawing takes the
+      // box's real width, one unit per CSS pixel, so its text is the same
+      // size in a full column, beside the readout and on a phone, and its
+      // height never changes — it is not a picture scaled to fit. Until
+      // then the whole drawing scaled with its box. What sits against the
+      // right edge moves with it: the server's horizontal gridlines, the
+      // Words labels and legend, the last date, the plot's clip; the rest
+      // (paths, axis, marks, crosshair) is redrawn from W.
+      function setChartWidth(nw) {
+        nw = Math.round(nw);
+        if (!(nw > padL + padR) || nw === W) return false;
+        const old = W, d = nw - old;
+        svg.querySelectorAll('line').forEach(l => {
+          if (+l.getAttribute('x1') === padL
+              && +l.getAttribute('x2') === old - padR) {
+            l.setAttribute('x2', nw - padR);
+          }
+        });
+        svg.querySelectorAll('.y-label-right, .legend-words, .x-label-right')
+          .forEach(el => el.setAttribute('x', +el.getAttribute('x') + d));
+        W = nw;
+        chartW = W - padL - padR;
+        if (plotClip) plotClip.setAttribute('width', chartW);
+        svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+        return true;
+      }
+      let onWidth = () => {};       // the crosshair's refresh, once it exists
+      function fitWidth() {
+        const cs = getComputedStyle(svg);
+        const box = svg.getBoundingClientRect().width;
+        if (!box) return;               // a hidden chart: drawn when shown
+        const inner = box - parseFloat(cs.paddingLeft)
+          - parseFloat(cs.paddingRight) - parseFloat(cs.borderLeftWidth)
+          - parseFloat(cs.borderRightWidth);
+        if (!setChartWidth(inner)) return;
+        redraw(currentMode());
+        refreshAxis();
+        onWidth();
+      }
+      fitWidth();
+      // Any change of the box's width — the window, the readout moving
+      // beside it or back, a fold opening, a chart taking its turn — redraws.
+      // On the next frame: redrawing inside the observer's own callback
+      // resizes what it watches, the loop browsers warn about.
+      if (window.ResizeObserver) new ResizeObserver(() => {
+        requestAnimationFrame(() => { placeReadout(); fitWidth(); });
+      }).observe(wrap);
 
       // Crosshair layer is APPENDED (not inserted first like .x-axis-layer):
       // the guide and its markers read on top of the series, not behind them.
@@ -1445,11 +1527,11 @@ whenSettled(function () {
         return best;
       }
 
-      // ── The 24h row ─────────────────────────────────────────────────────
-      // Line 2 of the readout: how much each count moved over the 24 hours
-      // ENDING at the moment line 1 is reporting — the hovered snapshot, or
+      // ── The 24h column ──────────────────────────────────────────────────
+      // The readout's last column: how much each count moved over the 24 hours
+      // ENDING at the moment its heading is reporting — the hovered snapshot, or
       // the newest build at rest. Tying it to the hovered point rather than to
-      // the reader's clock is what keeps the two lines honest: a fixed "last
+      // the reader's clock is what keeps the column honest: a fixed "last
       // 24h from now" sitting under a line reporting a build from March would
       // be two different moments stacked in one box.
       //
@@ -1477,84 +1559,154 @@ whenSettled(function () {
       // pinned there, so only the digits change while the layout holds still.
       // Measured with a probe carrying .ch-val rather than with a canvas, so it
       // inherits the real font and tabular-nums instead of a reconstruction.
-      const colW = { total: 0, words: 0 };
+      // Per series and per column (count, exponent, delta): the readout pins
+      // each column to the widest of the series it is showing.
+      const colW = {};
+      // Logarithmic shows each count as its natural log, `e^10.000`, in the
+      // count's place, the `e^` grey (user decisions 2026-11-05; it ran
+      // after the count, `· e^10.00`, earlier the same day): the axis is in
+      // ln steps, so this is the reading in the axis's own terms. Three
+      // places (user decision 2026-11-05; two earlier that day): 0.001 is
+      // 0.1% growth, so a quiet day still moves it. The column is pinned to the wider of the two forms, so
+      // switching scale never moves the readout or the graph beside it.
+      const lnOn = () => currentMode() === 'log';
+      const lnText = v => v > 0 ? `e^${Math.log(v).toFixed(3)}` : DASH;
+      const lnHtml = v => v > 0
+        ? `<span class="ch-e">e^</span>${Math.log(v).toFixed(3)}` : DASH;
+      // Its 24h change is the exponent's — ln now − ln 24h ago, no `e^`
+      // again — in thousandths, always: `+12`, under a `24h (×10⁻³)` heading
+      // (user decisions 2026-11-05; `+0.012`, then `+12×10⁻³` on every row,
+      // earlier the same day). 1×10⁻³ is about 0.1% growth. The heading's
+      // `(×10⁻³)` is grey like the `e^` — bracketed, the usual form for a
+      // heading's multiplier, so it cannot read as "24h times" — and a
+      // change that rounds to nothing is a bare 0, as the counts' is.
+      const LN_HEAD = '24h (×10⁻³)';
+      const lnDeltaParts = (i, key) => {
+        const b = baseOf[i] >= 0 ? points[baseOf[i]] : null;
+        const v = points[i][key], u = b && b[key];
+        if (!(v > 0) || !(u > 0)) return null;
+        const n = Math.round(1000 * (Math.log(v) - Math.log(u)));
+        return n === 0 ? '0' : (n > 0 ? '+' : '−') + Math.abs(n);
+      };
+      const lnDeltaText = (i, key) => {
+        const t = lnDeltaParts(i, key);
+        return t === null ? DASH : t;
+      };
       function pinColumns() {
         const probe = document.createElement('span');
         probe.className = 'ch-val';
         probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
         readout.appendChild(probe);
         const longest = strs => strs.reduce((a, b) => b.length > a.length ? b : a, '');
-        for (const key of ['total', 'words', ...overlayKeys]) {
-          const counts = longest(points.map(q => fmtCount(q[key])));
-          const deltas = longest(points.map((q, i) => {
-            const d = deltaAt(i, key);
-            return d === null ? DASH : fmtDelta(d);
-          }));
+        const width = (strs, cls = 'ch-val') => {
+          probe.className = cls;
           let w = 0;
-          for (const str of [counts, deltas, DASH]) {
+          for (const str of strs) {
             probe.textContent = str;
             w = Math.max(w, probe.getBoundingClientRect().width);
           }
-          colW[key] = Math.ceil(w);
+          return Math.ceil(w);
+        };
+        for (const key of ['total', 'words', ...overlayKeys]) {
+          colW[key] = {
+            count: width([longest(points.map(q => fmtCount(q[key]))),
+                          longest(points.map(q => lnText(q[key]))), DASH]),
+            delta: width([longest(points.map((q, i) => {
+              const d = deltaAt(i, key);
+              return d === null ? DASH : fmtDelta(d);
+            })), longest(points.map((q, i) => lnDeltaText(i, key))), DASH,
+            LN_HEAD],
+            'ch-val ch-d'),
+          };
         }
         probe.remove();
       }
 
+      // ONE ROW PER SERIES (user decision 2026-11-05): a heading row — the
+      // moment being read, and `24h` over the change column — then each
+      // visible series as key · count · exponent (Logarithmic only) · 24h
+      // change. Series ran side by side, the changes on a second row, until
+      // then; with several parts and their exponents that row ran off the
+      // box. Ticking a series now adds a row, so the page below moves on a
+      // tick, never on a hover.
       // Counts are always the raw values: the Log toggle changes the axis, not
-      // what the number is. A point predating word tracking has words == null
-      // and reads as a dash rather than dropping its field: a vanishing column
-      // is the one layout shift the pinned widths above cannot prevent.
+      // what the number is — except that Logarithmic writes it as its
+      // exponent (lnHtml).
+      // A point predating word tracking has words == null and reads as a dash
+      // rather than dropping its row.
       function renderReadout(i) {
         const p = points[i];
-        const lOn = linesOn(), wOn = wordsOn();
-        const field = (cls, key, val) =>
-          `<span class="ch-field ${cls}"><span class="ch-key">${key}</span>` +
-          `<span class="ch-val">${val}</span></span>`;
-        if (overlayKeys.length) {
-          const swatch = n => `<span class="ch-swatch" style="background:${overlayInfo[n].color}"></span>`;
-          let html = `<span class="ch-when">${fmtWhen(i)}</span>` + (lOn ? overlayKeys.map((k, n) =>
-            field('ch-f-overlay', swatch(n) + overlayInfo[n].label, fmtCount(p[k]))).join('') : '');
-          html += '<span class="ch-when ch-since">24h</span>' + (lOn ? overlayKeys.map(k => {
-            const d = deltaAt(i, k);
-            return field('ch-f-overlay ch-d', '', d === null ? DASH : fmtDelta(d));
-          }).join('') : '');
-          const track = w => w ? `${w}px` : 'auto';
-          readout.style.gridTemplateColumns = 'auto'
-            + (lOn ? overlayKeys.map(k => ` auto ${track(colW[k])}`).join('') : '');
-          readout.innerHTML = html;
-          return;
+        const ln = lnOn();
+        // A part's share on its name line: whole percent, always — 0.3%
+        // reads 0% (user decision 2026-11-05). Its own cell in the change's
+        // column, right-aligned so the percentages line up; no dot before
+        // it — the column already sets it apart from the name (user
+        // decisions 2026-11-05).
+        const fmtShare = v => v == null ? ''
+          : `<span class="ch-pct">${Math.round(v)}%</span>`;
+        // [css class, key html, series key, name line beneath or '']
+        const rows = [];
+        if (linesOn() && overlayKeys.length) {
+          overlayKeys.forEach((k, n) => {
+            const o = overlayInfo[n];
+            const sw = `<span class="ch-swatch" style="background:${o.color}"></span>`;
+            rows.push(o.code
+              ? ['ch-f-overlay', `${sw}<span class="ch-code">${o.code}</span>`,
+                 k, o.key === '' ? '' : [o.label, fmtShare(p[o.share])]]
+              : ['ch-f-overlay', sw + o.label, k, '']);
+          });
+          // The totals last, under a grey rule, as the Noticeboard widget
+          // has them (user decision 2026-11-05) — but only beneath parts.
+          const t = overlayInfo.findIndex(o => o.key === '');
+          if (t >= 0 && rows.length > 1) {
+            const [tot] = rows.splice(t, 1);
+            rows.push(['rule'], tot);
+          }
+        } else if (!overlayKeys.length) {
+          if (linesOn()) rows.push(['ch-f-lines', seriesName, 'total']);
+          if (wordsOn()) rows.push(['ch-f-words', 'Words', 'words']);
         }
-        let html =
-          `<span class="ch-when">${fmtWhen(i)}</span>` +
-          (lOn ? field('ch-f-lines', seriesName, fmtCount(p.total)) : '') +
-          (wOn ? field('ch-f-words', 'Words', fmtCount(p.words)) : '');
-
-        // The row is unconditional. Through the first day of any history there
-        // is no instant 24h back to measure from, and a dash says so plainly;
-        // a row that came and went would move the page under the reader for
-        // the same reason a resizing column does.
-        const cell = (cls, key) => {
-          const d = deltaAt(i, key);
-          return field(cls + ' ch-d', '', d === null ? DASH : fmtDelta(d));
+        let html = `<span class="ch-when ch-head">${fmtWhen(i)}</span>` +
+          '<span class="ch-when ch-since">24h' +
+          (ln ? ' <span class="ch-e">(×10⁻³)</span>' : '') + '</span>';
+        for (const [cls, label, k, name] of rows) {
+          if (cls === 'rule') { html += '<span class="ch-rule"></span>'; continue; }
+          const d = deltaAt(i, k);
+          html += `<span class="ch-field ${cls}">` +
+            `<span class="ch-key">${label}</span>` +
+            `<span class="ch-val">${ln ? lnHtml(p[k]) : fmtCount(p[k])}` +
+            '</span>' +
+            `<span class="ch-val ch-d">${ln ? lnDeltaText(i, k)
+              : d === null ? DASH : fmtDelta(d)}` +
+            '</span>' +
+            (name ? `<span class="ch-name">${name[0]}</span>` +
+              `<span class="ch-name ch-name-share">${name[1]}</span>` : '') +
+            '</span>';
+        }
+        // Key, count, [exponent], change — each value track pinned to the
+        // widest of the rows showing. A pinned width of 0 means the probe
+        // measured inside a hidden box: fall back to an auto track rather
+        // than clamping the column shut.
+        const track = part => {
+          const w = Math.max(0, ...rows.filter(r => r[2])
+            .map(r => (colW[r[2]] || {})[part] || 0));
+          return w ? `${w}px` : 'auto';
         };
-        html +=
-          '<span class="ch-when ch-since">24h</span>' +
-          (lOn ? cell('ch-f-lines', 'total') : '') +
-          (wOn ? cell('ch-f-words', 'words') : '');
-        // One column for the when/since label, then a (key, value) pair per
-        // VISIBLE series — set here rather than in CSS because unchecking a
-        // series removes its two columns, and a fixed template would leave
-        // their gaps behind. Line 2's empty key cells hold its deltas in the
-        // same columns as the counts they modify; that alignment is what lets
-        // the row drop its own labels.
-        // A pinned width of 0 means the probe measured inside a hidden box —
-        // fall back to an auto track rather than clamping the column shut.
-        const track = w => w ? `${w}px` : 'auto';
-        readout.style.gridTemplateColumns = 'auto'
-          + (lOn ? ` auto ${track(colW.total)}` : '')
-          + (wOn ? ` auto ${track(colW.words)}` : '');
+        readout.style.gridTemplateColumns = `auto ${track('count')}`
+          + ` ${track('delta')}`;
         readout.innerHTML = html;
+        // Beside the graph, the readout's column only ever grows: measured
+        // when the set of lines changes, never on a mere move.
+        const shape = (ln ? 'ln|' : '') + rows.map(r => r[2]).join(',');
+        if (shape !== readoutShape && wrap.classList.contains('ch-side')) {
+          readoutShape = shape;
+          readout.style.minWidth = '';
+          const w = Math.ceil(readout.getBoundingClientRect().width);
+          readoutW = Math.max(readoutW, w);
+          readout.style.minWidth = `${readoutW}px`;
+        }
       }
+      let readoutShape = '', readoutW = 0;
 
       let activeIdx = -1;
       function showAt(i) {
@@ -1564,7 +1716,13 @@ whenSettled(function () {
         const x = xs(dates[i]);
         chLine.setAttribute('x1', x.toFixed(1));
         chLine.setAttribute('x2', x.toFixed(1));
-        const lOn = linesOn() && p.total != null, wOn = wordsOn() && p.words != null;
+        // A reading below the axis's bottom (a log floor, or Zoom's fitted
+        // axis) gets no dot (user decision 2026-11-05): its line is clipped
+        // there, so a dot under the plot would point at nothing.
+        const above = y => y <= padT + chartH + 0.5;
+        const lOn = linesOn() && p.total != null
+          && above(s.yl(p.total));
+        const wOn = wordsOn() && p.words != null && above(s.yw(p.words));
         if (lOn) {
           chDotLines.setAttribute('cx', x.toFixed(1));
           chDotLines.setAttribute('cy', s.yl(p.total).toFixed(1));
@@ -1577,7 +1735,7 @@ whenSettled(function () {
         chDotWords.style.display = wOn && !overlayKeys.length ? '' : 'none';
         overlayDots.forEach((dot, n) => {
           const v = points[i][overlayKeys[n]];
-          const on = linesOn() && v != null;
+          const on = linesOn() && v != null && above(s.yl(v));
           if (on) {
             dot.setAttribute('cx', x.toFixed(1));
             dot.setAttribute('cy', s.yl(v).toFixed(1));
@@ -1669,6 +1827,7 @@ whenSettled(function () {
       // are already settled by the time this runs.
       const refreshCrosshair = () =>
         activeIdx >= 0 ? showAt(activeIdx) : restCrosshair();
+      onWidth = refreshCrosshair;
       ctlGroup('chart-scale').forEach(radio => {
         radio.addEventListener('change', refreshCrosshair);
       });
@@ -1812,6 +1971,17 @@ whenSettled(function () {
           return r ? (r.dataset.seriesLabel || r.cells[0].textContent.trim())
             : seriesLabels[key] || key;
         };
+        // A part's three-letter code, where its row shows one (Workshop
+        // Stats' `atl`, the .part-key span) — the readout's key, with the
+        // name beneath it (user decision 2026-11-05). '' elsewhere.
+        // The totals line, on such a page, is `total`, with no name beneath
+        // (the widget's own word for it; user decision 2026-11-05).
+        const coded = rows.some(r => r.querySelector('.part-key'));
+        const codeOf = key => {
+          if (key === '') return coded ? 'total' : '';
+          const k = rowOf(key) && rowOf(key).querySelector('.part-key');
+          return k ? k.textContent.trim() : '';
+        };
         // The live point's slot (loadPoints): the totals and each series at
         // index rawPoints.length, from the live answer's same-named fields.
         liveHook = () => {
@@ -1859,12 +2029,23 @@ whenSettled(function () {
           // nothing.
           const first = pick(valuesOf(keys[0]));
           points.forEach((p, i) => { p.total = first[i]; p.words = null; });
+          // Each part's share of the Total at every point, for its name
+          // line in the readout (user decision 2026-11-05): only where the
+          // page offers that part a Share, and not while Share is drawn —
+          // the count is the share then.
+          const grand = pick(all.total);
           keys.forEach((key, n) => {
             const k = 'o' + n;
             const vals = pick(valuesOf(key));
             points.forEach((p, i) => { p[k] = vals[i]; });
+            const share = !shareOn() && shareSet.has(key) ? 's' + n : '';
+            if (share) points.forEach((p, i) => {
+              p[share] = vals[i] == null || !grand[i] ? null
+                : 100 * vals[i] / grand[i];
+            });
             overlayKeys.push(k);
-            overlayInfo.push({ key, label: labelOf(key), color: colourOf(key) });
+            overlayInfo.push({ key, label: labelOf(key), code: codeOf(key),
+                               share, color: colourOf(key) });
             const path = linesPath.cloneNode(false);
             path.removeAttribute('d');
             path.classList.add('overlay-series');
@@ -2189,10 +2370,12 @@ whenSettled(function () {
       // <details> the probe has no layout, so every width above measured 0.
       const fold = svg.closest('details');
       if (fold) fold.addEventListener('toggle', () => {
-        if (fold.open) { pinColumns(); refreshCrosshair(); }
+        if (fold.open) { placeReadout(); pinColumns(); refreshCrosshair(); }
       });
       // The same re-measure for a chart shown by the alternates switch.
-      svg.chartApi.relayout = () => { pinColumns(); refreshCrosshair(); };
+      svg.chartApi.relayout = () => {
+        placeReadout(); pinColumns(); refreshCrosshair();
+      };
     }
   });
 
