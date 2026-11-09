@@ -93,6 +93,13 @@
      every site, docs and Hub page): `.container`'s width, and anything
      that measures the gutter beside it, reads this. */
   --column: 880px;
+  /* THE HALVES (user decision 2026-11-08): the column split into two
+     equal halves this far apart — the index pages' main and side
+     (index.css .row) and a split page's side and pane (.container.split
+     below) read it. Both stack into one column at 600px wide and under;
+     a media query can't read a variable, so that number is written at
+     both rules. */
+  --halves-gap: 2rem;
   /* THE PAGE'S EDGE, named (2026-10-22): `body`'s padding below, and
      anything that paints the gap — the Hub's bedtime frame — reads these
      rather than restating the rule. */
@@ -185,6 +192,27 @@ body {
   position: relative;
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* A SPLIT PAGE (user decision 2026-11-08): the column in two halves
+   (--halves-gap), where the right half is a pane that starts at the very
+   top, level with the trail, and stays in view while the left scrolls.
+   Everything else — the trail, the title, the controls, the content —
+   lives in the left half. Opt-in: the page's container carries `split`,
+   holding `.page-side` then `.page-pane`. 600px and under, one column,
+   the pane after the side. */
+.container.split { display: flex; gap: var(--halves-gap);
+                   align-items: flex-start; }
+.container.split > .page-side,
+.container.split > .page-pane { flex: 1; min-width: 0; }
+.container.split > .page-pane {
+  position: sticky; top: var(--edge-y);
+  max-height: calc(100vh - 2 * var(--edge-y)); overflow-y: auto;
+}
+@media (max-width: 600px) {
+  .container.split { flex-direction: column; gap: 0; }
+  .container.split > .page-pane { position: static; max-height: none;
+    overflow-y: visible; margin-top: 1rem; }
 }
 
 /* (`.back-link`, a link pinned to the container's top-right corner, lived
@@ -615,6 +643,21 @@ table { width: 100%; border-collapse: collapse; }
    so leaves and folders align at the same indent. */
 .toc li > a::before { content: "\25B8 "; color: transparent; font-size: 0.8em; }
 .toc details > ol { margin-top: 0.3rem; }
+
+/* A FOLD — a section that opens and shuts (user decision 2026-11-08:
+   "the style SSOTs with other interface apps"). Healing Trajectory's
+   `details.fold` (its old page's `details.crit`), lifted onto the shelf
+   so every interface folds alike; 生活自理 Life Skills' Checklist
+   uses it, and controls.js `wireFoldAll` / `rememberFolds` drive it. */
+details.fold { margin-top: 0.9rem; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface); }
+details.fold > summary { cursor: pointer; padding: 0.55rem 0.9rem;
+  font-weight: 600; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: "\25B8 "; color: var(--muted); }
+details.fold[open] > summary::before { content: "\25BE "; }
+details.fold > .inside { padding: 0 0.9rem 0.9rem; }
+details.fold > .inside > :first-child { margin-top: 0.2rem; }
 
 /* Index-page-specific styles (root, protected, private). Layered on top of
    base.css — theme tokens, body, h1, .head-meta, .container live
@@ -1107,9 +1150,10 @@ li.has-folder, li.has-open { --row-icon-w: 1.9rem; --row-icon-h: 1.6rem; }
   color: var(--muted); font-size: 0.8rem;
 }
 
-.row { display: flex; gap: 2rem; align-items: flex-start; }
+.row { display: flex; gap: var(--halves-gap); align-items: flex-start; }
 /* Both columns flex:1 → they divide the row's available width evenly,
-   minus the 2 rem gap. No hardcoded width on either side. */
+   minus the gap (base.css --halves-gap, shared with a split page). No
+   hardcoded width on either side. */
 .main { flex: 1; min-width: 0; }
 .side { flex: 1; min-width: 0; }
 .side hr { margin: 0.8rem 0; }
@@ -1523,7 +1567,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="app/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">106,854 lines 📊</a> ✦ Last updated <time datetime="2026-11-08T03:50:21Z" title="2026-11-08 03:50 UTC" class="relative-time">2026-11-08</time></p>
+<p class="head-meta"><a href="stats/">106,854 lines 📊</a> ✦ Last updated <time datetime="2026-11-09T03:50:13Z" title="2026-11-09 03:50 UTC" class="relative-time">2026-11-09</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
