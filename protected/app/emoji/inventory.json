@@ -252,12 +252,6 @@
   "asset": true
  },
  {
-  "glyph": "🕛",
-  "cps": "1f55b",
-  "count": 3,
-  "asset": true
- },
- {
   "glyph": "🕰️",
   "cps": "1f570-fe0f",
   "count": 3,
@@ -462,6 +456,12 @@
   "asset": true
  },
  {
+  "glyph": "🕛",
+  "cps": "1f55b",
+  "count": 2,
+  "asset": true
+ },
+ {
   "glyph": "🖋️",
   "cps": "1f58b-fe0f",
   "count": 2,
@@ -636,6 +636,12 @@
   "asset": true
  },
  {
+  "glyph": "🎒",
+  "cps": "1f392",
+  "count": 1,
+  "asset": true
+ },
+ {
   "glyph": "🎛️",
   "cps": "1f39b-fe0f",
   "count": 1,
@@ -740,6 +746,12 @@
  {
   "glyph": "🐖",
   "cps": "1f416",
+  "count": 1,
+  "asset": true
+ },
+ {
+  "glyph": "💼",
+  "cps": "1f4bc",
   "count": 1,
   "asset": true
  },
