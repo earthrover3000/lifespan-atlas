@@ -521,7 +521,19 @@ whenSettled(function () {
       // axis is linear and runs to at most 100%; the scale radios go inert.
       let shareKeys = [];
       try { shareKeys = JSON.parse(svg.dataset.chartShare || '[]'); } catch (e) { shareKeys = []; }
-      const shareOn = () => shareKeys.length > 0 && isOn('measure-share');
+      // ── Own | With libraries (user decision 2026-11-13) ─────────────────
+      // Where the chart publishes data-chart-libs (source_stats.chart
+      // `libs`: Workshop Stats' app and site parts), each such part's line
+      // can be drawn as its footprint — its own lines plus the Libraries
+      // code it reaches — instead. Footprints overlap wherever two parts
+      // share a module, so their shares add up to nothing: Share stands
+      // aside while it is on, as the scale radios do for Share.
+      let libsSteps = {};
+      try { libsSteps = JSON.parse(svg.dataset.chartLibs || '{}'); } catch (e) { libsSteps = {}; }
+      const libsOn = () => Object.keys(libsSteps).length > 0
+        && isOn('libs-with');
+      const shareOn = () => shareKeys.length > 0 && isOn('measure-share')
+        && !libsOn();
 
       // ── Point resolution: every snapshot, or one point per day ───────────
       // The public page's payload arrives collapsed to days (data-chart-daily
@@ -666,6 +678,15 @@ whenSettled(function () {
       // A series chart's live values (filed / unfiled): its picker fills
       // them in, at the live point's own index (below).
       let liveHook = () => {};
+      // ── Checked ──────────────────────────────────────────────────────────
+      // A chart of commit-checked counts (`data-chart-checked`, source_stats
+      // .chart `checked` — user decision 2026-11-13) learns when the counts
+      // were last CHECKED. A reading is recorded only when a count changes,
+      // so without this a quiet line stops at its last change; with it the
+      // line runs on, flat, to the check — never further. Read on open and
+      // every five minutes, like the live point.
+      const checkedUrl = svg.dataset.chartChecked || '';
+      let checkedMs = NaN;
       function loadPoints() {
         const view = daysMode() ? collapseDaily(rawPoints) : rawPoints.map((p, i) => ({ ts: p.ts, j: i }));
         idxMap = view.map(v => v.j);
@@ -678,6 +699,18 @@ whenSettled(function () {
           // Its own slot, one past the payload: a series' value there is the
           // live one (liveHook), never the last recorded reading.
           idxMap.push(rawPoints.length);
+        }
+        const tail = points[points.length - 1];
+        // In Days, a check on the newest day adds nothing: that day's point
+        // already stands for it.
+        if (dates.length && checkedMs > +dates[dates.length - 1]
+            && !(daysMode() && dayKey(new Date(checkedMs).toISOString())
+                 === dayKey(tail.ts))) {
+          points.push({ ts: new Date(checkedMs).toISOString(),
+                        total: tail.total, words: tail.words, checked: true });
+          dates.push(new Date(checkedMs));
+          // The newest reading's slot again: every series holds its value.
+          idxMap.push(idxMap[idxMap.length - 1]);
         }
         const last = dates[dates.length - 1];
         // Where the DATA ends: the newest snapshot, or now. The chart's
@@ -963,15 +996,19 @@ whenSettled(function () {
       };
       // ── Today ────────────────────────────────────────────────────────────
       // A dashed red guide at now (stats.css .today-line — the atlas's anchor
-      // red, user decision 2026-10-07). The axis runs past now to the end of
-      // the current blocks, so without it the eye has no way to tell where
-      // the data stops and the projection starts. Behind the series like the
+      // red, user decision 2026-10-07), drawn only when the newest point is
+      // more than 24 hours old (placeToday; user decision 2026-11-13). The
+      // axis runs past now to the end of the current blocks; while the data
+      // is fresh the series' own end shows where it stops, so the line is
+      // kept for the stale case: no data since the series ends, or a page
+      // not rebuilt since an earlier day. Behind the series like the
       // boundary lines, and placed by redraw(): the domain it sits in widens
       // once the marks engine says where the current blocks end. Drawn in
       // both resolutions — today is a fact of the clock, not of the series.
       // The strip beyond it reads the newest point (indexAt, user decision
       // 2026-11-08), as the strip before the first point reads the first.
       const SVGNS = 'http://www.w3.org/2000/svg';
+      const STALE_AFTER_MS = 24 * 3600 * 1000;
       const todayLayer = document.createElementNS(SVGNS, 'g');
       todayLayer.setAttribute('class', 'today-layer');
       const todayLine = document.createElementNS(SVGNS, 'line');
@@ -1023,9 +1060,16 @@ whenSettled(function () {
         const x = xForMs(+now);
         todayLine.setAttribute('x1', x.toFixed(1));
         todayLine.setAttribute('x2', x.toFixed(1));
+        // Only once the data is more than a day old (user decision
+        // 2026-11-13): while it is fresh, where the series ends already says
+        // where it stops, and the line only repeated it. `dates` carries the
+        // live point and the last check too, so either counts as fresh.
+        const newest = dates.length ? +dates[dates.length - 1] : -Infinity;
+        const stale = +now - newest > STALE_AFTER_MS;
         // Only strictly inside the plot — on the right edge it would double
         // the frame's own line.
-        todayLayer.style.display = x > padL + 0.5 && x < W - padR - 0.5 ? '' : 'none';
+        todayLayer.style.display =
+          stale && x > padL + 0.5 && x < W - padR - 0.5 ? '' : 'none';
       }
 
       function redraw(mode) {
@@ -1120,6 +1164,23 @@ whenSettled(function () {
         };
         askLive();
         setInterval(askLive, 300000);
+      }
+      if (checkedUrl) {
+        const askChecked = async () => {
+          try {
+            const r = await fetch(checkedUrl, { cache: 'no-store' });
+            if (!r.ok) return;
+            const ms = Date.parse((await r.json()).ts);
+            if (isNaN(ms) || ms === checkedMs) return;
+            checkedMs = ms;
+            loadPoints();
+            activeIdx = -1;
+            reapply();
+            refreshAxis();
+          } catch (e) { /* no check time; the line ends at its reading */ }
+        };
+        askChecked();
+        setInterval(askChecked, 300000);
       }
       ctlGroup('chart-scale').forEach(radio => {
         radio.addEventListener('change', () => redraw(currentMode()));
@@ -1507,7 +1568,9 @@ whenSettled(function () {
       //     string: passing it through Date would print an invented 00:00 and,
       //     for any reader west of UTC, roll the date back a day.
       const fmtWhen = i => {
-        if (dayGranular && !points[i].live) return points[i].ts.slice(0, 10);
+        if (dayGranular && !points[i].live && !points[i].checked) {
+          return points[i].ts.slice(0, 10);
+        }
         const d = dates[i];
         return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ` +
                `${p2(d.getHours())}:${p2(d.getMinutes())}`;
@@ -1927,6 +1990,14 @@ whenSettled(function () {
         for (const key of Object.keys(series)) {
           expanded[key] = { total: expand(series[key].lines), words: expand(series[key].words) };
         }
+        // Each footprint part's line With libraries, against the same raw
+        // snapshots; `countsOf` is a part's count in whichever is on.
+        const withLibs = {};
+        for (const key of Object.keys(libsSteps)) {
+          if (expanded[key]) withLibs[key] = expand(libsSteps[key]);
+        }
+        const countsOf = key => libsOn() && withLibs[key]
+          ? withLibs[key] : expanded[key].total;
         // Each shared part's percentage of the totals at every raw snapshot:
         // null where the part has no reading or the totals none yet (a
         // merged chart's Total starts once every part is recorded).
@@ -1983,7 +2054,7 @@ whenSettled(function () {
         // drawn against the whole. [''] alone is the default chart.
         let chosen = [''];
         const valuesOf = key => shareOn() && shares[key] ? shares[key]
-          : key === '' ? all.total : expanded[key].total;
+          : key === '' ? all.total : countsOf(key);
         // The lines actually drawn. Counts: the choice. Share: the shared
         // parts in it — the totals would be a flat 100% and a part outside
         // the total has no share — or, when it names none, every shared
@@ -2051,7 +2122,7 @@ whenSettled(function () {
         function show(key) {
           const s = expanded[key];
           shown = s ? key : '';
-          const t = pick(s ? s.total : all.total);
+          const t = pick(s ? countsOf(key) : all.total);
           const w = pick(s ? s.words : all.words);
           points.forEach((p, i) => { p.total = t[i]; p.words = w[i]; });
           scoped = !!s;
@@ -2091,7 +2162,9 @@ whenSettled(function () {
             const k = 'o' + n;
             const vals = pick(valuesOf(key));
             points.forEach((p, i) => { p[k] = vals[i]; });
-            const share = !shareOn() && shareSet.has(key) ? 's' + n : '';
+            // Not for a footprint: overlapping, it is no share of the Total.
+            const share = !shareOn() && shareSet.has(key)
+              && !(libsOn() && withLibs[key]) ? 's' + n : '';
             if (share) points.forEach((p, i) => {
               p[share] = vals[i] == null || !grand[i] ? null
                 : 100 * vals[i] / grand[i];
@@ -2313,6 +2386,22 @@ whenSettled(function () {
         });
         syncScaleRadios();
         if (shareOn()) reapply();
+      }
+      // Own ⇄ With libraries: the same choice again, each footprint part
+      // redrawn as its footprint. Share goes inert while it is on (its
+      // choice kept for the way back), and the scale radios follow what is
+      // drawn now. Applied on load too, for a Back that restores it.
+      if (Object.keys(libsSteps).length) {
+        const syncMeasureRadios = () => ctlGroup('chart-measure')
+          .forEach(r => { r.disabled = libsOn(); });
+        ctlGroup('chart-libs').forEach(radio => {
+          radio.addEventListener('change', () => {
+            syncMeasureRadios(); syncScaleRadios(); reapply();
+          });
+        });
+        syncMeasureRadios();
+        syncScaleRadios();
+        if (libsOn()) reapply();
       }
 
       // ── Year navigation: ‹ 2026 › ─────────────────────────────────────
