@@ -180,6 +180,13 @@
      the anchor / today marker red on every atlas surface — keep the two in
      step, as --future-grey is kept with the theme's futureGrey. */
   --anchor-red: #e53935;
+  /* THE BROWSER KEY'S MARK (user decision 2026-11-15: "give the corner
+     quotes a different colour so I'm able to distinguish which set of keys
+     they were encrypted by"): the corner brackets of a value sealed with
+     the browser key (ENB) are green, where the passphrase key's (ENC) wear
+     the accent blue. A hue apart from the accent and from the anchor red,
+     at each theme's own lightness so it reads on either ground. */
+  --sealed-b-mark: light-dark(#1e8f4e, #4cc47e);
   /* THE TODAY WASH — that red under the words that say "today": the site
      roadmap's Today row (stats.css .roadmap-today), the Death Plan's Stats
      (its current stage's end). SAME red both ways; the STRENGTH differs
@@ -1678,7 +1685,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="app/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">107,377 lines 📊</a> ✦ Last updated <time datetime="2026-11-15T09:23:53Z" title="2026-11-15 09:23 UTC" class="relative-time">2026-11-15</time></p>
+<p class="head-meta"><a href="stats/">107,377 lines 📊</a> ✦ Last updated <time datetime="2026-11-15T10:31:23Z" title="2026-11-15 10:31 UTC" class="relative-time">2026-11-15</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
