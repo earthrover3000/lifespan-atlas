@@ -457,6 +457,35 @@ body:not(.with-sidebar) > :is(.sidebar, .sidebar-toggle, .sidebar-backdrop) {
 .controls-row .lock-controls { display: inline-flex; gap: 0.5rem; }
 .controls-row .lock-controls:empty { display: none; }
 
+/* ONE SWITCH STYLE: PILLS (user decisions 2026-11-16: "pills … SSOT",
+   then "a single style"): every row of choices with one on — a filter, a
+   view switch, a pick of names, AND a tab row (index_page `tabs_bar`,
+   `.tabs`, its on tab `.on`) — is drawn as these rounded pills, lifted
+   from 疗愈轨迹 Healing Trajectory's chips. There is no underlined tab row
+   any more: a page that switches whole panels uses the same pills.
+   Markup either way:
+     <div class="chips" role="radiogroup">
+       <button type="button" role="radio" aria-checked="true">Date</button>
+       <button type="button" role="radio" aria-checked="false">Days ago</button>
+     </div>
+   The pill that is on wears the accent; a pill for something archived is
+   dashed and muted (`.arch`). A page without --accent-soft gets a pale mix
+   of the accent. */
+.chips, .tabs { display: flex; flex-wrap: wrap; gap: 0.35rem;
+  margin: 0.5rem 0; }
+.tabs { margin: 0 0 var(--head-end, 1rem); }   /* a tab row ends the head */
+.chips button, .tabs button { font: inherit; font-size: 0.88rem;
+  cursor: pointer; padding: 0.15rem 0.7rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); }
+.chips button[aria-checked="true"], .tabs button.on,
+.tabs button[aria-selected="true"] {
+  background: var(--accent-soft, color-mix(in srgb, var(--accent) 15%, var(--surface)));
+  border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.tabs button.on { cursor: default; }
+.chips button[hidden], .tabs button[hidden] { display: none; }
+.chips button.arch { border-style: dashed; color: var(--muted); }
+
 /* ---- Head-region typography ---- */
 h1 {
   font-size: 1.6rem;
@@ -1686,7 +1715,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="app/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">107,377 lines 📊</a> ✦ Last updated <time datetime="2026-11-16T03:50:12Z" title="2026-11-16 03:50 UTC" class="relative-time">2026-11-16</time></p>
+<p class="head-meta"><a href="stats/">107,377 lines 📊</a> ✦ Last updated <time datetime="2026-11-17T03:50:16Z" title="2026-11-17 03:50 UTC" class="relative-time">2026-11-17</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
