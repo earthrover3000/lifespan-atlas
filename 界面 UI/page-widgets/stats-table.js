@@ -391,7 +391,7 @@ whenSettled(function () {
     if (diffDays === 0) return 'today';
     const future = diffDays > 0;
     const absDays = Math.abs(diffDays);
-    if (absDays < 60) {
+    if (absDays < 70) {                 // days up to 70 (2026-11-18)
       const body = `${absDays} day${absDays === 1 ? '' : 's'}`;
       return future ? `in ${body}` : body;
     }
@@ -1972,8 +1972,12 @@ whenSettled(function () {
             if (!on && roHideOff) return;
             const sw = '<span class="ch-swatch"'
               + (on ? ` style="background:${r.color}"` : '') + '></span>';
+            // The total wears .ch-sum: bold, the Noticeboard widget's
+            // format; the footer's rows (Raw Code) do not (user
+            // decisions 2026-11-18).
+            const sum = r.key === '' ? ' ch-sum' : '';
             (r.key === '' ? tot : r.foot ? foot : parts).push([
-              on ? 'ch-f-line' : 'ch-f-line ch-off',
+              (on ? 'ch-f-line' : 'ch-f-line ch-off') + sum,
               r.code ? `${sw}<span class="ch-code">${r.code}</span>`
                 : sw + r.label,
               r.k, r.code && r.key !== ''

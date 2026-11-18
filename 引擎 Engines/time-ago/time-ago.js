@@ -13,6 +13,20 @@
 //             claude.sh — not here)
 //   CALENDAR  a thing with only a date: today · yesterday · 3 days ago ·
 //             in 2 years 1 month (relative-time.js's `relative-time-coarse`)
+//   COMPACT   the tightest span: no space before the unit (d h m s), one
+//             space between parts, never padded. Every unit from the
+//             largest down to a FLOOR, zeros kept below the lead (user
+//             decisions 2026-11-18). Span: compactSpanText, and
+//             compactUnits for a page with a column per unit; until:
+//             compactUntilText, rounded UP to the floor ("in 1h 20m");
+//             unit: compactUnitText, ONE whole unit, hours up to 48 h
+//             ("15m", "30h", "3d" — the Services panel's ages); ago:
+//             compactAgoText, that unit + " ago", "just now" under a
+//             minute ("fetched 30h ago").
+//               floor h   6d 17h · 6d 0h · 17h · 0h
+//                         (the status line's 7-day countdown, Usage page)
+//               floor s   45s · 3m 7s · 2h 0m 7s · 1d 0h 5m 0s
+//                         (the Noticeboard's Sessions widget)
 //
 // THE SHAPES, in Short and Full:
 //
@@ -135,6 +149,66 @@ export function fullSpanText(seconds) {
 export function fullUntilText(seconds) {
   const s = Math.ceil(seconds / 60) * 60;
   return s <= 0 ? "now" : `in ${fullSpanText(s)}`;
+}
+
+// COMPACT's units, largest first: [seconds per unit, its letter].
+const COMPACT_UNITS = [[86400, "d"], [3600, "h"], [60, "m"], [1, "s"]];
+
+/** Compact parts {d, h, m, s} (floored): every unit from the largest that
+ *  fits down to `floor` set, zeros included; the rest "". Under the floor
+ *  the floor alone, "0h" / "0s". */
+export function compactUnits(seconds, floor = "h") {
+  const s = Math.max(0, Math.floor(seconds));
+  const out = { d: "", h: "", m: "", s: "" };
+  const last = COMPACT_UNITS.findIndex(([, u]) => u === floor);
+  let lead = COMPACT_UNITS.findIndex(([n]) => s >= n);
+  if (lead < 0 || lead > last) lead = last;
+  for (let i = lead; i <= last; i++) {
+    const [n, u] = COMPACT_UNITS[i];
+    const above = i === lead ? Infinity : COMPACT_UNITS[i - 1][0];
+    out[u] = `${Math.floor((s % above) / n)}${u}`;
+  }
+  return out;
+}
+
+/** Compact span (floored) down to `floor`: "6d 17h", "6d 0h", "17h" with
+ *  the default hour floor; "2h 0m 7s", "45s" with "s". */
+export function compactSpanText(seconds, floor = "h") {
+  const u = compactUnits(seconds, floor);
+  return [u.d, u.h, u.m, u.s].filter(Boolean).join(" ");
+}
+
+// Below this, a one-unit COMPACT age stays in hours (user decision
+// 2026-11-18, the Services panel's rule before 2026-11-17): a daily job
+// that last ran 30 hours ago reads "30h", not "1d", so a missed run shows.
+const COMPACT_DAYS_FROM = 48 * 3600;
+
+/** Compact unit (floored): one whole unit, minutes under an hour, HOURS up
+ *  to 48 h, then days — "0m", "15m", "30h", "3d". `largest` "h" never turns
+ *  to days ("50h"), for a figure read against an hour target (the Beta
+ *  hold's "30h/24h", 2026-11-18). */
+export function compactUnitText(seconds, largest = "d") {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (largest === "h" || s < COMPACT_DAYS_FROM) {
+    return `${Math.floor(s / 3600)}h`;
+  }
+  return `${Math.floor(s / 86400)}d`;
+}
+
+/** Compact ago: "just now" under a minute, else the compact unit and
+ *  "ago" — "15m ago", "30h ago", "3d ago". */
+export function compactAgoText(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  return s < 60 ? "just now" : `${compactUnitText(s)} ago`;
+}
+
+/** Compact until, rounded UP to `floor` ("m" by default): "in 1h 20m",
+ *  "in 2h 0m", "in 5m"; "now" once it has come. */
+export function compactUntilText(seconds, floor = "m") {
+  const n = COMPACT_UNITS.find(([, u]) => u === floor)[0];
+  const s = Math.ceil(seconds / n) * n;
+  return s <= 0 ? "now" : `in ${compactSpanText(s, floor)}`;
 }
 
 /** `seconds` until something, to the minute (rounded up): "in 1 h 20 min".
