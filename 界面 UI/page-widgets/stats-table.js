@@ -418,7 +418,7 @@ whenSettled(function () {
   const builds = document.querySelectorAll('[data-build-ts]');
   if (builds.length) {
     import('../../引擎 Engines/time-ago/time-ago.js')
-      .then(({ agoText }) => builds.forEach(el => {
+      .then(({ fullAgoText: agoText }) => builds.forEach(el => {
         const dt = new Date(el.dataset.buildTs);
         if (isNaN(dt.getTime())) return;
         el.textContent = agoText((now - dt) / 1000);
@@ -626,6 +626,22 @@ whenSettled(function () {
         y => y.startMs <= todayDay && todayDay < y.endMs);
       if (yearIdx < 0) yearIdx = years.length - 1;
       let yr = years.length ? years[yearIdx] : null;
+      // The All projects line BEFORE its first reading (source_stats.chart
+      // `projection.back`, user decisions 2026-11-17): from 0 on `zero` to
+      // that reading, shown from `from`. Read here, ahead of the forward
+      // projection, because the domain and Zoom's blocks reach back to it.
+      const backSpan = (() => {
+        try {
+          const b = (JSON.parse(svg.dataset.chartProjection || 'null')
+                     || {}).back;
+          if (!b) return null;
+          const at = iso => {
+            const [y, m, d] = iso.split('-').map(Number);
+            return new Date(y, m - 1, d).getTime();
+          };
+          return { zeroMs: at(b.zero), fromMs: at(b.from) };
+        } catch (e) { return null; }
+      })();
 
       // What `points` currently is, and everything derived from its shape.
       // All `let`: loadPoints() rebuilds the lot, and every function below
@@ -677,7 +693,8 @@ whenSettled(function () {
           return;
         }
         if (yr) { domainMinMs = yr.startMs; domainMaxMs = yr.endMs; return; }
-        domainMinMs = +dates[0];
+        domainMinMs = Math.min(+dates[0],
+                               backSpan ? backSpan.fromMs : Infinity);
         domainMaxMs = Math.max(dataEndMs, winEndMs);
       }
       // One value per point out of a per-RAW-snapshot array — how a project's
@@ -895,6 +912,12 @@ whenSettled(function () {
       // columns and the log scale all serve every line with no second code
       // path. Empty = the single-series chart, exactly as before.
       let overlayKeys = [], overlayPaths = [], overlayDots = [], overlayInfo = [];
+      // EVERY LINE IN THE READOUT (user decision 2026-11-17): each series
+      // the chart has, drawn or not, under a key of its own in `points`
+      // (r0, r1, …), in the table's order. `drawn` says which are on the
+      // graph; the rest read in grey, and a click on a row ticks it. Empty
+      // on a chart with no series, which keeps its single Lines row.
+      let roRows = [], roHideOff = false;
       // Nothing ticked in the picker (user decision 2026-10-24): an empty
       // frame, in Counts and Share alike.
       let emptyChart = false;
@@ -950,6 +973,30 @@ whenSettled(function () {
         return { t, v, rate, ...line };
       }
       const projAt = (from, t) => from.v + from.rate * (t - from.t) / DAY_MS;
+      // The back piece as projFrom gives the forward one — its first
+      // reading {t, v}, its rate a day from 0 on `zero`, its key — plus
+      // `startMs`, where it shows from; null in a share, or with no line
+      // or no room. Drawn whatever the Projection checkbox says.
+      function backFrom() {
+        if (!backSpan || shareOn()) return null;
+        const line = projLine(true);
+        if (!line) return null;
+        const i = points.findIndex(p => p[line.k] != null);
+        if (i < 0) return null;
+        const t = +dates[i], v = points[i][line.k];
+        const days = (t - backSpan.zeroMs) / DAY_MS;
+        const startMs = Math.max(backSpan.fromMs, backSpan.zeroMs);
+        if (days <= 0 || startMs >= t) return null;
+        return { t, v, rate: v / days, startMs, ...line };
+      }
+      // The piece holding the moment ms: the back one before the first
+      // reading, the forward one (while ticked) after the newest.
+      function projFor(ms) {
+        const back = backFrom();
+        if (back && ms < back.t) return back;
+        const from = projFrom();
+        return from && ms > from.t ? from : null;
+      }
       // Size both axes to what the window shows.
       function measure() {
         const idx = onScreen();
@@ -960,6 +1007,11 @@ whenSettled(function () {
         const from = projFrom();
         if (from && from.t < domainMaxMs && projEndMs > domainMinMs) {
           totals.push(projAt(from, Math.min(projEndMs, domainMaxMs)));
+        }
+        // …and the back piece's lowest, where it enters the window.
+        const back = backFrom();
+        if (back && back.startMs < domainMaxMs && back.t > domainMinMs) {
+          totals.push(projAt(back, Math.max(back.startMs, domainMinMs)));
         }
         wordVals = idx.map(i => points[i].words).filter(v => v != null);
         lnLines = lnBounds(totals, logFloor);
@@ -1164,33 +1216,43 @@ whenSettled(function () {
       // on a log axis. The hover reads it (showProjected).
       const projCb = projData ? ctl('projection-on') : null;
       const projKey = `chart-projection:${location.pathname}`;
-      let projPath = null;
+      let projPath = null, backPath = null;
       // On or off survives a reload in this tab, as the choice of lines.
       if (projCb) {
         try { projCb.checked = sessionStorage.getItem(projKey) === 'on'; }
         catch (e) { /* storage off */ }
       }
+      // One dashed piece of the All projects line, t0 to t1, after it.
+      function dashed(from, t0, t1, y) {
+        const host = from.n < 0 ? linesPath : overlayPaths[from.n];
+        if (!host) return null;
+        const N = 48;
+        let d = '';
+        for (let k = 0; k <= N; k++) {
+          const t = t0 + (t1 - t0) * k / N;
+          d += `${k ? ' L ' : 'M '}${xForMs(t).toFixed(1)},`
+            + `${y(projAt(from, t)).toFixed(1)}`;
+        }
+        const path = host.cloneNode(false);
+        path.classList.add('projection-series');
+        path.style.display = '';
+        path.setAttribute('d', d);
+        host.after(path);
+        return path;
+      }
       function drawProjection(y) {
         if (projPath) { projPath.remove(); projPath = null; }
+        if (backPath) { backPath.remove(); backPath = null; }
+        // The back piece, always (user decision 2026-11-17); drawn from
+        // the first reading back, so its dashes meet the line with a gap
+        // as the forward piece's leave it.
+        const back = backFrom();
+        if (back) backPath = dashed(back, back.t, back.startMs, y);
         if (!projCb) return;
         // Greyed while there is no All projects line to project.
         projCb.disabled = !projLine(true);
         const from = projFrom();
-        const host = !from ? null : from.n < 0 ? linesPath
-          : overlayPaths[from.n];
-        if (!host) return;
-        const N = 48;
-        let d = '';
-        for (let k = 0; k <= N; k++) {
-          const t = from.t + (projEndMs - from.t) * k / N;
-          d += `${k ? ' L ' : 'M '}${xForMs(t).toFixed(1)},`
-            + `${y(projAt(from, t)).toFixed(1)}`;
-        }
-        projPath = host.cloneNode(false);
-        projPath.classList.add('projection-series');
-        projPath.style.display = '';
-        projPath.setAttribute('d', d);
-        host.after(projPath);
+        if (from) projPath = dashed(from, from.t, projEndMs, y);
       }
 
       function redraw(mode) {
@@ -1394,6 +1456,7 @@ whenSettled(function () {
             .find(b => b.startMs === today.endMs);
           const zoomEnd = after ? after.endMs : win.endMs;
           const from = Math.min(dates.length ? +dates[0] : Infinity,
+                                backSpan ? backSpan.fromMs : Infinity,
                                 current[0].startMs);
           zoomBlocks = marks.getBlockMarksInRange(from, zoomEnd - 1,
                                                   blockCtx)
@@ -1844,7 +1907,7 @@ whenSettled(function () {
         const unit = (plain ? 9999 : 10 - 10 ** -decimals) * unitScale;
         const wide = [`−${fmtNum(unit, decimals)}`, DASH];
         if (shareKeys.length) wide.push('−99.9 pt');
-        for (const key of ['total', 'words', ...overlayKeys]) {
+        for (const key of ['total', 'words', ...roRows.map(r => r.k)]) {
           colW[key] = {
             count: width([longest(points.map(q => fmtCount(q[key]))),
                           longest(points.map(q => lnText(q[key]))), DASH]),
@@ -1885,7 +1948,11 @@ whenSettled(function () {
         // A projection is a guess: whole lines, whole lines a day (user
         // decision 2026-11-16); a share keeps its place.
         const whole = v => shareOn() ? v : Math.round(v);
-        const p = proj ? { [proj.k]: whole(proj.v) } : points[i];
+        // A projection is the All projects line's: its row's key, where
+        // every line has a row.
+        const totRow = roRows.find(r => r.key === '');
+        const pk = !proj ? null : totRow ? totRow.k : proj.k;
+        const p = proj ? { [pk]: whole(proj.v) } : points[i];
         const ln = lnOn();
         // A part's share on its name line: whole percent, always — 0.3%
         // reads 0% (user decision 2026-11-05). Its own cell in the change's
@@ -1894,25 +1961,37 @@ whenSettled(function () {
         // decisions 2026-11-05).
         const fmtShare = v => v == null ? ''
           : `<span class="ch-pct">${Math.round(v)}%</span>`;
-        // [css class, key html, series key, name line beneath or '']
+        // [css class, key html, series key, name line beneath or '',
+        //  roRows index — what a click on the row ticks]
         const rows = [];
-        if (linesOn() && overlayKeys.length) {
-          overlayKeys.forEach((k, n) => {
-            const o = overlayInfo[n];
-            const sw = `<span class="ch-swatch" style="background:${o.color}"></span>`;
-            rows.push(o.code
-              ? ['ch-f-overlay', `${sw}<span class="ch-code">${o.code}</span>`,
-                 k, o.key === '' ? '' : [o.label, fmtShare(p[o.share])]]
-              : ['ch-f-overlay', sw + o.label, k, '']);
+        if (roRows.length) {
+          const parts = [], tot = [], foot = [];
+          roRows.forEach((r, n) => {
+            const on = linesOn() && r.drawn;
+            // The bar's Hide unticked (user decision 2026-11-17).
+            if (!on && roHideOff) return;
+            const sw = '<span class="ch-swatch"'
+              + (on ? ` style="background:${r.color}"` : '') + '></span>';
+            (r.key === '' ? tot : r.foot ? foot : parts).push([
+              on ? 'ch-f-line' : 'ch-f-line ch-off',
+              r.code ? `${sw}<span class="ch-code">${r.code}</span>`
+                : sw + r.label,
+              r.k, r.code && r.key !== ''
+                ? [r.label, fmtShare(p[r.share])] : '',
+              n, r.still]);
           });
-          // The totals last, under a grey rule, as the Noticeboard widget
-          // has them (user decision 2026-11-05) — but only beneath parts.
-          const t = overlayInfo.findIndex(o => o.key === '');
-          if (t >= 0 && rows.length > 1) {
-            const [tot] = rows.splice(t, 1);
-            rows.push(['rule'], tot);
+          // The totals after the parts, under a grey rule, as the
+          // Noticeboard widget has them (user decision 2026-11-05) — the
+          // rule only beneath parts. A row the table keeps in its footer
+          // below the Total (Workshop Stats' Raw Code, outside the total)
+          // follows it here too (user decision 2026-11-17).
+          rows.push(...parts);
+          if (parts.length && tot.length + foot.length) rows.push(['rule']);
+          rows.push(...tot, ...foot);
+          if (wordsOn() && !overlayKeys.length) {
+            rows.push(['ch-f-words', 'Words', 'words']);
           }
-        } else if (!overlayKeys.length) {
+        } else {
           if (linesOn()) rows.push(['ch-f-lines', seriesName, 'total']);
           if (wordsOn()) rows.push(['ch-f-words', 'Words', 'words']);
         }
@@ -1929,21 +2008,22 @@ whenSettled(function () {
           (ln ? `<span class="ch-e ch-mult ch-mult-24">${LN_MULT}</span>`
             + (two ? `<span class="ch-e ch-mult">${LN_MULT}</span>` : '')
             : '');
-        for (const [cls, label, k, name] of rows) {
+        for (const [cls, label, k, name, ro, still] of rows) {
           if (cls === 'rule') { html += '<span class="ch-rule"></span>'; continue; }
-          const d = proj ? (k === proj.k ? whole(proj.rate) : null)
+          const d = still ? null : proj ? (k === pk ? whole(proj.rate) : null)
             : deltaAt(i, k);
-          const lnD = !proj ? lnDeltaText(i, k)
+          const lnD = still ? DASH : !proj ? lnDeltaText(i, k)
             : d === null || !(p[k] - d > 0) ? DASH
             : '+' + Math.round(1000 * (Math.log(p[k]) - Math.log(p[k] - d)));
-          html += `<span class="ch-field ${cls}">` +
+          html += `<span class="ch-field ${cls}"`
+            + (ro === undefined ? '' : ` data-ro="${ro}"`) + '>' +
             `<span class="ch-key">${label}</span>` +
             `<span class="ch-val">${ln ? lnHtml(p[k]) : fmtCount(p[k])}` +
             '</span>' +
             `<span class="ch-val ch-d">${ln ? lnD
               : d === null ? DASH : fmtDelta(d)}` +
             '</span>' +
-            (two ? `<span class="ch-val ch-d">${proj ? DASH
+            (two ? `<span class="ch-val ch-d">${proj || still ? DASH
               : ln ? lnTodayText(i, k) : fmtTodayText(i, k)}</span>` : '') +
             (name ? `<span class="ch-name">${name[0]}</span>` +
               `<span class="ch-name ch-name-share">${name[1]}</span>` : '') +
@@ -2024,7 +2104,7 @@ whenSettled(function () {
         return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
       };
       function showProjected(ms) {
-        const from = projFrom();
+        const from = projFor(ms);
         if (!from) { restCrosshair(); return; }
         activeIdx = -1;
         activeProj = ms;
@@ -2101,27 +2181,42 @@ whenSettled(function () {
       // projection mode the strip past the newest point reads the dashed
       // line, to its end or the window's (user decision 2026-11-16).
       function projMsAt(evt) {
-        if (!projOn()) return NaN;
-        const from = projFrom();
         const ctm = svg.getScreenCTM();
-        if (!from || !ctm) return NaN;
+        if (!ctm) return NaN;
         const q = svg.createSVGPoint();
         q.x = evt.clientX; q.y = evt.clientY;
         const vx = q.matrixTransform(ctm.inverse()).x;
-        const endMs = Math.min(projEndMs, domainMaxMs);
-        if (vx <= xForMs(from.t) || vx > W - padR + 8
-            || from.t >= endMs) return NaN;
-        // Past the plot's right edge, still the projection's last day.
-        const ms = Math.min(endMs, domainMinMs
-          + (vx - padL) / chartW * (domainMaxMs - domainMinMs));
-        // Every day at 04:00, the start of a sleep day (user decision
-        // 2026-11-16): the nearest one after the newest point and by the
-        // end, as a reading the day it began.
+        const msAt = x => domainMinMs
+          + (x - padL) / chartW * (domainMaxMs - domainMinMs);
         const at4 = (t, add) => {
           const d = new Date(t);
           return new Date(d.getFullYear(), d.getMonth(), d.getDate() + add,
                           4).getTime();
         };
+        // Before the first reading, the back piece (user decision
+        // 2026-11-17): every day at 04:00 from where it shows to the
+        // reading; left of where it shows, nothing to read.
+        const back = backFrom();
+        if (back && vx < xForMs(back.t)) {
+          const lo = Math.max(back.startMs, domainMinMs);
+          if (vx < xForMs(lo) - 8) return NaN;
+          const ms = Math.max(lo, msAt(vx));
+          const near = [-1, 0, 1].map(k => at4(ms, k))
+            .filter(t => t >= lo && t < back.t)
+            .sort((a, b) => Math.abs(a - ms) - Math.abs(b - ms));
+          return near.length ? near[0] : NaN;
+        }
+        if (!projOn()) return NaN;
+        const from = projFrom();
+        if (!from) return NaN;
+        const endMs = Math.min(projEndMs, domainMaxMs);
+        if (vx <= xForMs(from.t) || vx > W - padR + 8
+            || from.t >= endMs) return NaN;
+        // Past the plot's right edge, still the projection's last day.
+        const ms = Math.min(endMs, msAt(vx));
+        // Every day at 04:00, the start of a sleep day (user decision
+        // 2026-11-16): the nearest one after the newest point and by the
+        // end, as a reading the day it began.
         const near = [-1, 0, 1].map(k => at4(ms, k))
           .filter(t => t > from.t && t <= endMs)
           .sort((a, b) => Math.abs(a - ms) - Math.abs(b - ms));
@@ -2158,7 +2253,7 @@ whenSettled(function () {
       // redraw()/applyVisibility() listeners above, so the paths and visibility
       // are already settled by the time this runs.
       const refreshCrosshair = () =>
-        !isNaN(activeProj) && projOn() ? showProjected(activeProj)
+        !isNaN(activeProj) && projFor(activeProj) ? showProjected(activeProj)
           : activeIdx >= 0 ? showAt(activeIdx) : restCrosshair();
       onWidth = refreshCrosshair;
       ctlGroup('chart-scale').forEach(radio => {
@@ -2257,19 +2352,20 @@ whenSettled(function () {
         const rows = Array.from(document.querySelectorAll('tr[data-series]'))
           .filter(r => r.dataset.series === '' || series[r.dataset.series]);
         const rowOf = key => rows.find(r => r.dataset.series === key);
-        // The picker: the same choice from beside the chart, so comparing
-        // projects is not a scroll back up to the table for each. A
-        // MULTI-SELECT since 2026-10-18 (user decision): tick several and
-        // they are drawn together (the overlay above); one alone is the
-        // single-series chart as before; none is the totals. Each ticked
-        // project wears the colour of its line, so the list is the legend.
-        const picker = document.createElement('details');
-        picker.className = 'chart-scope chart-multi';
-        const summary = document.createElement('summary');
-        summary.setAttribute('aria-label', 'Which projects to chart');
-        const panel = document.createElement('div');
-        panel.className = 'chart-multi__panel';
-        picker.append(summary, panel);
+        // The choice from beside the chart, so comparing projects is not a
+        // scroll back up to the table for each. A MULTI-SELECT since
+        // 2026-10-18 (user decision): tick several and they are drawn
+        // together (the overlay above); one alone is the single-series
+        // chart as before; none is an empty frame. THE READOUT IS THE
+        // PICKER since 2026-11-17 (user decision): it lists every line, a
+        // ticked one in its colour, and a click on a row ticks it — so
+        // the drop-down list that did this (2026-10-18) is gone, and only
+        // its All / None stay, in this bar, with Hide unticked beside
+        // them.
+        const picker = document.createElement('div');
+        picker.className = 'chart-bulk';
+        picker.setAttribute('role', 'group');
+        picker.setAttribute('aria-label', 'Which lines to chart');
         // ONE FIXED COLOUR PER LINE (user decision 2026-10-18): a line's
         // colour belongs to its series, not to the order it was ticked in,
         // so a project wears the same colour alone and beside others. The
@@ -2447,6 +2543,40 @@ whenSettled(function () {
             return Array.isArray(v) ? v : null;
           } catch (e) { return null; }
         };
+        // Every line's values for the readout (roRows, above): each series
+        // the table lists, in its order, then any it does not (a chart
+        // with no table), the Total among them. In the measure on screen:
+        // under Share a line with no share reads as dashes. A part's share
+        // of the Total rides beside it, as the overlay's does.
+        function fillReadout(drawn) {
+          const order = [...rows.map(r => r.dataset.series),
+                         '', ...Object.keys(series)];
+          const keys = [...new Set(order)]
+            .filter(k => k === '' || (expanded[k] && listed(k)));
+          const grand = pick(all.total);
+          roRows = keys.map((key, n) => {
+            const k = 'r' + n;
+            const vals = shareOn() && !shareSet.has(key) ? null
+              : pick(valuesOf(key));
+            const share = !shareOn() && key !== '' && shareSet.has(key)
+              ? 'rs' + n : '';
+            points.forEach((q, i) => {
+              q[k] = vals ? vals[i] : null;
+              if (share) {
+                q[share] = vals[i] == null || !grand[i] ? null
+                  : 100 * vals[i] / grand[i];
+              }
+            });
+            const row = key === '' ? null : rowOf(key);
+            return { k, key, share, label: labelOf(key), code: codeOf(key),
+                     color: colourOf(key), drawn: drawn.includes(key),
+                     foot: !!(row && row.closest('tfoot')),
+                     // A row that counts no change (data-series-still:
+                     // Workshop Stats' Raw Code, user decision
+                     // 2026-11-17) — a dash under 24h and today.
+                     still: !!(row && row.hasAttribute('data-series-still')) };
+          });
+        }
         function setChosen(keys) {
           chosen = keys.filter(k => k === '' || (expanded[k] && listed(k)));
           saveChoice();
@@ -2455,6 +2585,7 @@ whenSettled(function () {
           // a reset). The page still opens on the totals.
           const drawn = drawnKeys();
           emptyChart = !drawn.length;
+          fillReadout(drawn);
           if (emptyChart) {
             clearOverlay();
             shown = '';
@@ -2477,19 +2608,6 @@ whenSettled(function () {
         }
         function syncChoice() {
           const drawn = drawnKeys();
-          summary.textContent = !drawn.length ? 'No lines ▾'
-            : drawn.length === 1 ? labelOf(drawn[0]) + ' ▾'
-            : `${drawn.length} lines ▾`;
-          picker.classList.toggle('scoped', !(drawn.length === 1 && drawn[0] === ''));
-          panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
-            const key = cb.dataset.key;
-            const n = drawn.indexOf(key);
-            cb.checked = n >= 0;
-            // Under Share only the shared parts can be ticked.
-            cb.disabled = shareOn() && !shareSet.has(key);
-            const sw = cb.parentElement.querySelector('.chart-multi__swatch');
-            if (sw) sw.style.background = n >= 0 ? colourOf(key) : 'transparent';
-          });
           rows.forEach(r => {
             const n = drawn.indexOf(r.dataset.series);
             // Every drawn line's row lights, the Total's alone too (user
@@ -2527,54 +2645,58 @@ whenSettled(function () {
           return !r || !r.dataset.unlist
             || document.documentElement.hasAttribute('data-show-' + r.dataset.unlist);
         };
-        // All / None (user request 2026-10-24), above the list. All ticks
-        // every project — not the totals, which would flatten them against
-        // the whole; tick that row too to draw it. Where the chart names the
-        // parts that make up its Total (data-chart-share), All is those, in
-        // Counts as in Share: Workshop Stats' Raw Code, outside the Total,
-        // stays unticked (user decision 2026-11-08). None empties the
-        // chart, ready for the lines you tick next.
-        const bulk = (label, keys) => {
+        // All / None (user request 2026-10-24). All ticks every project —
+        // not the totals, which would flatten them against the whole; tick
+        // that row too to draw it. Where the chart names the parts that make
+        // up its Total (data-chart-share), All is those, in Counts as in
+        // Share: Workshop Stats' Raw Code, outside the Total, stays
+        // unticked (user decision 2026-11-08). None empties the chart,
+        // ready for the lines you tick next.
+        const bulk = (label, onClick) => {
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'chart-multi__bulk-btn';
+          b.className = 'chart-bulk__btn';
           b.textContent = label;
-          b.addEventListener('click', () => setChosen(keys()));
+          b.addEventListener('click', onClick);
           return b;
         };
-        function fillPicker() {
-          panel.textContent = '';
-          const bulkRow = document.createElement('div');
-          bulkRow.className = 'chart-multi__bulk';
-          bulkRow.append(
-            bulk('All', () => shareSet.size ? sharedParts()
-              : Object.keys(series).filter(listed)),
-            bulk('None', () => []));
-          panel.appendChild(bulkRow);
-          const option = (key, label) => {
-            const l = document.createElement('label');
-            l.className = 'chart-multi__option';
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.dataset.key = key;
-            cb.addEventListener('change', () => toggle(key));
-            const sw = document.createElement('span');
-            sw.className = 'chart-multi__swatch';
-            l.append(cb, sw, document.createTextNode(label));
-            panel.appendChild(l);
-          };
-          option('', labelOf(''));
-          Object.keys(series).filter(listed).forEach(key => option(key, labelOf(key)));
-          if (chosen.some(k => !listed(k))) setChosen(chosen); else syncChoice();
-        }
-        fillPicker();
-        window.addEventListener('storage', fillPicker);
-        window.addEventListener('pageshow', e => { if (e.persisted) fillPicker(); });
-        // A click anywhere else folds the list away.
-        document.addEventListener('click', e => {
-          if (picker.open && !picker.contains(e.target)) picker.open = false;
+        // Hide unticked (user decision 2026-11-17): the readout down to the
+        // lines drawn, for the reader who has chosen. Kept per page in this
+        // tab, as the choice is.
+        const hideKey = `chart-hide-off:${location.pathname}`;
+        try { roHideOff = sessionStorage.getItem(hideKey) === 'on'; }
+        catch (e) { /* storage off */ }
+        const hideBtn = bulk('', () => {
+          roHideOff = !roHideOff;
+          try { sessionStorage.setItem(hideKey, roHideOff ? 'on' : 'off'); }
+          catch (e) { /* storage off: the switch just doesn't persist */ }
+          syncHide();
+          refreshCrosshair();
         });
+        const syncHide = () => {
+          hideBtn.textContent = roHideOff ? 'Show unticked' : 'Hide unticked';
+          hideBtn.setAttribute('aria-pressed', String(roHideOff));
+        };
+        syncHide();
+        picker.append(
+          bulk('All', () => setChosen(shareSet.size ? sharedParts()
+            : Object.keys(series).filter(listed))),
+          bulk('None', () => setChosen([])),
+          hideBtn);
+        // A row that left (or came back with) its Settings switch: the
+        // choice re-applied re-reads which lines there are.
+        const relist = () => setChosen(chosen);
+        window.addEventListener('storage', relist);
+        window.addEventListener('pageshow', e => { if (e.persisted) relist(); });
         navRowEl().appendChild(picker);
+        // A click on a readout row ticks its line, as the table's row does.
+        // The end of a drag across its text is a selection, not a click.
+        readout.addEventListener('click', e => {
+          const f = e.target.closest('[data-ro]');
+          if (!f || String(window.getSelection())) return;
+          const r = roRows[+f.dataset.ro];
+          if (r) toggle(r.key);
+        });
 
         const calm = window.matchMedia('(prefers-reduced-motion: reduce)');
         rows.forEach(r => {
@@ -2609,8 +2731,9 @@ whenSettled(function () {
         // A resolution change rebuilds `points` on the totals; re-apply the
         // choice so the view, not the selection, is what changed.
         reapply = () => setChosen(chosen);
-        const saved = savedChoice();
-        if (saved) setChosen(saved);
+        // The first draw: the choice this tab kept for the page, or the
+        // totals — through setChosen either way, which fills the readout.
+        setChosen(savedChoice() || chosen);
         svg.chartApi.getChoice = () => chosen.slice();
         svg.chartApi.setChoice = keys => setChosen(keys);
       }
