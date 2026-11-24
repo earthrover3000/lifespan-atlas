@@ -360,6 +360,12 @@
   "asset": true
  },
  {
+  "glyph": "🏆",
+  "cps": "1f3c6",
+  "count": 2,
+  "asset": true
+ },
+ {
   "glyph": "🏞️",
   "cps": "1f3de-fe0f",
   "count": 2,
@@ -662,12 +668,6 @@
  {
   "glyph": "🎼",
   "cps": "1f3bc",
-  "count": 1,
-  "asset": true
- },
- {
-  "glyph": "🏆",
-  "cps": "1f3c6",
   "count": 1,
   "asset": true
  },
