@@ -132,6 +132,11 @@
      a media query can't read a variable, so that number is written at
      both rules. */
   --halves-gap: 2rem;
+  /* A SPLIT PAGE'S COLUMN (user decision 2026-11-26): wider than
+     --column, so each half reads as a page of its own (about 544px, not
+     424px). 1120px leaves the margins clear in a 1280px-wide window, the
+     maximised browser on a 4K screen at 3× scale. */
+  --split-column: 1120px;
   /* THE PAGE'S EDGE, named (2026-10-22): `body`'s padding below, and
      anything that paints the gap — the Hub's bedtime frame — reads these
      rather than restating the rule. */
@@ -253,7 +258,8 @@ body {
    holding `.page-side` then `.page-pane`. 600px and under, one column,
    the pane after the side. */
 .container.split { display: flex; gap: var(--halves-gap);
-                   align-items: flex-start; }
+                   align-items: flex-start;
+                   max-width: var(--split-column); }
 .container.split > .page-side,
 .container.split > .page-pane { flex: 1; min-width: 0; }
 .container.split > .page-pane {
@@ -841,6 +847,29 @@ details.fold > summary::before { content: "\25B8 "; color: var(--muted); }
 details.fold[open] > summary::before { content: "\25BE "; }
 details.fold > .inside { padding: 0 0.9rem 0.9rem; }
 details.fold > .inside > :first-child { margin-top: 0.2rem; }
+
+/* THE PAGE'S MESSAGES FLOAT (user decision 2026-11-25: "it shouldn't take
+   extra space, it shouldn't move the content below it"): page-widgets/
+   helper-store.js `say` draws one toast at the foot of the window, over
+   the page and out of its flow. An error (`.bad`) stays until clicked.
+   The look is the Repository Map's toast, which floated first. */
+.page-toast { position: fixed; left: 50%; bottom: 1.5rem; z-index: 50;
+  transform: translateX(-50%); max-width: calc(100% - 2rem);
+  padding: 0.5rem 0.9rem; border-radius: 8px;
+  background: var(--text); color: var(--bg);
+  font-size: 0.85rem; overflow-wrap: anywhere; cursor: default;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 0.2s, visibility 0s 0.2s; }
+.page-toast.on { opacity: 0.95; visibility: visible; pointer-events: auto;
+  transition: opacity 0.2s; }
+.page-toast.bad { background: var(--anchor-red); color: #fff;
+  cursor: pointer; }
+.page-toast button.linkish { color: inherit; text-decoration: underline; }
+
+/* A COPY ANSWERS ON ITS BUTTON (user decision 2026-11-25): copy-text.js
+   `copyButton` turns the button's words to "Copied ✓" for a moment. */
+.copied { color: var(--accent); }
+.copy-failed { color: var(--anchor-red); }
 
 /* Index-page-specific styles (root, protected, private). Layered on top of
    base.css — theme tokens, body, h1, .head-meta, .container live
@@ -1757,7 +1786,7 @@ a.app-card:hover {
 <div class="container">
 <nav class="breadcrumb" aria-label="Breadcrumb"><a href="app/">Lifespan Atlas</a> <span class="sep">›</span> <span aria-current="page">Protected Index</span></nav>
 <h1>Lifespan Atlas</h1>
-<p class="head-meta"><a href="stats/">110,437 lines 📊</a> ✦ Last updated <time datetime="2026-11-25T08:42:33Z" title="2026-11-25 08:42 UTC" class="relative-time">2026-11-25</time></p>
+<p class="head-meta"><a href="stats/">110,437 lines 📊</a> ✦ Last updated <time datetime="2026-11-26T03:40:15Z" title="2026-11-26 03:40 UTC" class="relative-time">2026-11-26</time></p>
 <div class="filter-row">
   <input type="search" class="filter" placeholder="Search…" aria-label="Search entries on this page">
   <select class="tier-nav" onchange="if(this.value)location.href=this.value" aria-label="Switch index">
